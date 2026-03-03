@@ -1,1 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>フロッガー - ステップ4: 川とゴール</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+        #gameCanvas {
+            background-color: #000;
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 320 / 480; 
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            image-rendering: pixelated;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="320" height="480"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const CELL_SIZE = 32;
+        const COLS = 10;
+        const ROWS = 15;
+
+        // --- 1. アセットデータ ---
+        const frogSprites = {
+            idle: [
+                [0, 0, 1, 1, 1, 1, 0, 0], [0, 3, 4, 1, 1, 3, 4, 0],
+                [1, 1, 1, 1, 1, 1, 1, 1], [1, 2, 2, 2, 2, 2, 2, 1],
+                [1, 1, 1, 1, 1, 1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 0],
+                [0, 1, 0, 0, 0, 0, 1, 0], [1, 1, 0, 0, 0, 0, 1, 1]
+            ],
+            jump: [
+                [0, 0, 1, 1, 1, 1, 0, 0], [0, 3, 4, 1, 1, 3, 4, 0],
+                [1, 1, 1, 1, 1, 1, 1, 1], [1, 2, 2, 2, 2, 2, 2, 1],
+                [0, 1, 1, 1, 1, 1, 1, 0], [1, 1, 0, 0, 0, 0, 1, 1],
+                [1, 0, 0, 0, 0, 0, 0, 1], [1, 0, 0, 0, 0, 0, 0, 1]
+            ]
+        };
+        const carSprite = [
+            [0, 0, 0, 0, 0, 0, 0, 0], [0, 5, 5, 5, 5, 5, 0, 0],
+            [5, 5, 6, 6, 6, 5, 5, 0], [5, 5, 5, 5, 5, 5, 5, 5],
+            [5, 5, 5, 5, 5, 5, 5, 5], [0, 4, 0, 0, 0, 4, 0, 0],
+            [0, 4, 0, 0, 0, 4, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]
+        ];
+        // 丸太のドット絵 (8x8)
+        const logSprite = [
+            [0, 7, 7, 7, 7, 7, 7, 0], [7, 7, 8, 7, 7, 8, 7, 7],
+            [7, 8, 7, 7, 7, 7, 8, 7], [7, 7, 7, 8, 7, 7, 7, 7],
+            [7, 7, 7, 7, 7, 8, 7, 7], [7, 8, 7, 7, 8, 7, 7, 7],
+            [7, 7, 8, 7, 7, 7, 8, 7], [0, 7, 7, 7, 7, 7, 7, 0]
+        ];
+        
+        // パレット拡張 7:丸太(茶色), 8:丸太の模様(濃い茶)
+        const palette = [null, '#00FF00', '#ADFF2F', '#FFFFFF', '#000000', '#FF3333', '#88CCFF', '#8B4513', '#5D2E0A'];
+
+        const gameState = {
+            lastTime: 0,
+            frog: { 
+                x: 4, y: 14, 
+                pixelX: 4 * CELL_SIZE, pixelY: 14 * CELL_SIZE, // 滑らかな移動（丸太用）
+                frame: 'idle', animTimer: 0, direction: 0 
+            },
+            input: { dx: 0, dy: 0 },
+            moveTimer: 0,
+            MOVE_INTERVAL: 180,
+            cars: [],
+            logs: [],
+            lanes: [],
+            status: 'playing', // playing, win, die
+            score: 0
+        };
+
+        function resetFrog() {
+            gameState.frog.x = 4;
+            gameState.frog.y = 14;
+            gameState.frog.pixelX = 4 * CELL_SIZE;
+            gameState.frog.pixelY = 14 * CELL_SIZE;
+            gameState.frog.direction = 0;
+            gameState.frog.frame = 'idle';
+            gameState.status = 'playing';
+        }
+
+        function initLanes() {
+            gameState.lanes = [
+                // 川セクション (丸太) - 行 1 〜 5
+                { y: 1, type: 'log', speed: -30, spawnRate: 0.01 },
+                { y: 2, type: 'log', speed:  50, spawnRate: 0.008 },
+                { y: 3, type: 'log', speed: -45, spawnRate: 0.012 },
+                { y: 4, type: 'log', speed:  35, spawnRate: 0.009 },
+                { y: 5, type: 'log', speed:  60, spawnRate: 0.007 },
+                // 道路セクション (車) - 行 8 〜 12
+                { y: 8,  type: 'car', speed: -40, spawnRate: 0.01,  color: '#FF3333' },
+                { y: 9,  type: 'car', speed:  55, spawnRate: 0.008, color: '#33FF33' },
+                { y: 10, type: 'car', speed: -70, spawnRate: 0.015, color: '#FF33FF' },
+                { y: 11, type: 'car', speed:  40, spawnRate: 0.012, color: '#FFFF33' },
+                { y: 12, type: 'car', speed: -90, spawnRate: 0.006, color: '#33FFFF' }
+            ];
+        }
+
+        // --- 入力処理 ---
+        function moveFrog(dx, dy) {
+            if (gameState.status !== 'playing') return;
+
+            const newX = gameState.frog.x + dx;
+            const newY = gameState.frog.y + dy;
+
+            if (dx > 0) gameState.frog.direction = 1;
+            else if (dx < 0) gameState.frog.direction = 3;
+            else if (dy > 0) gameState.frog.direction = 2;
+            else if (dy < 0) gameState.frog.direction = 0;
+
+            if (newX >= 0 && newX < COLS) gameState.frog.x = newX;
+            if (newY >= 0 && newY < ROWS) gameState.frog.y = newY;
+
+            // グリッド移動直後にピクセル座標も同期（瞬間移動感）
+            gameState.frog.pixelX = gameState.frog.x * CELL_SIZE;
+            gameState.frog.pixelY = gameState.frog.y * CELL_SIZE;
+
+            gameState.frog.frame = 'jump';
+            gameState.frog.animTimer = 100;
+        }
+
+        // 入力イベント設定 (前ステップと同様)
+        let touchStartX = 0, touchStartY = 0;
+        const DEADZONE = 20;
+
+        window.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; touchStartY = e.changedTouches[0].screenY; }, { passive: false });
+        window.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const dx = e.changedTouches[0].screenX - touchStartX;
+            const dy = e.changedTouches[0].screenY - touchStartY;
+            if (Math.abs(dx) > DEADZONE || Math.abs(dy) > DEADZONE) {
+                if (Math.abs(dx) > Math.abs(dy)) setInput(dx > 0 ? 1 : -1, 0);
+                else setInput(0, dy > 0 ? 1 : -1);
+            } else setInput(0, 0);
+        }, { passive: false });
+        window.addEventListener('touchend', () => setInput(0, 0));
+        window.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp') setInput(0, -1);
+            else if (e.key === 'ArrowDown') setInput(0, 1);
+            else if (e.key === 'ArrowLeft') setInput(-1, 0);
+            else if (e.key === 'ArrowRight') setInput(1, 0);
+        });
+        window.addEventListener('keyup', e => { if (e.key.startsWith('Arrow')) setInput(0, 0); });
+
+        function setInput(dx, dy) {
+            if ((dx !== 0 || dy !== 0) && (gameState.input.dx !== dx || gameState.input.dy !== dy)) {
+                moveFrog(dx, dy);
+                gameState.moveTimer = 0;
+            }
+            gameState.input.dx = dx;
+            gameState.input.dy = dy;
+        }
+
+        // --- 更新ロジック ---
+        function update(deltaTime) {
+            if (gameState.status !== 'playing') return;
+            const dtSec = deltaTime / 1000;
+
+            // 1. カエルの連続移動入力
+            if (gameState.input.dx !== 0 || gameState.input.dy !== 0) {
+                gameState.moveTimer += deltaTime;
+                if (gameState.moveTimer >= gameState.MOVE_INTERVAL) {
+                    moveFrog(gameState.input.dx, gameState.input.dy);
+                    gameState.moveTimer = 0;
+                }
+            }
+            if (gameState.frog.animTimer > 0) {
+                gameState.frog.animTimer -= deltaTime;
+                if (gameState.frog.animTimer <= 0) gameState.frog.frame = 'idle';
+            }
+
+            // 2. オブジェクト生成・移動
+            gameState.lanes.forEach(lane => {
+                if (Math.random() < lane.spawnRate) {
+                    const list = lane.type === 'car' ? gameState.cars : gameState.logs;
+                    const canSpawn = !list.some(obj => obj.y === lane.y && ((lane.speed > 0 && obj.x < 2) || (lane.speed < 0 && obj.x > COLS - 3)));
+                    if (canSpawn) {
+                        list.push({ x: lane.speed > 0 ? -2 : COLS + 1, y: lane.y, speed: lane.speed, type: lane.type, color: lane.color || null });
+                    }
+                }
+            });
+
+            [gameState.cars, gameState.logs].forEach(list => {
+                for (let i = list.length - 1; i >= 0; i--) {
+                    const obj = list[i];
+                    obj.x += (obj.speed / CELL_SIZE) * dtSec;
+                    if (obj.x > COLS + 2 || obj.x < -3) list.splice(i, 1);
+                }
+            });
+
+            // 3. 当たり判定 & ギミック
+            const fx = gameState.frog.x;
+            const fy = gameState.frog.y;
+
+            // ゴール判定
+            if (fy === 0) {
+                gameState.status = 'win';
+                setTimeout(resetFrog, 1000);
+                return;
+            }
+
+            // 道路エリア判定
+            if (fy >= 8 && fy <= 12) {
+                for (const car of gameState.cars) {
+                    if (car.y === fy && Math.abs(car.x - fx) < 0.7) {
+                        resetFrog();
+                        return;
+                    }
+                }
+            }
+
+            // 川エリア判定 (丸太に乗る)
+            if (fy >= 1 && fy <= 5) {
+                let onLog = false;
+                for (const log of gameState.logs) {
+                    // 丸太は2マス分の幅があると想定して判定
+                    if (log.y === fy && fx >= log.x - 0.5 && fx <= log.x + 1.5) {
+                        onLog = true;
+                        // 丸太と一緒に流される（ピクセルではなくグリッド座標を更新）
+                        // ※簡易化のため、一定距離流れたら隣のグリッドへ。
+                        const moveStep = (log.speed / CELL_SIZE) * dtSec;
+                        gameState.frog.pixelX += log.speed * dtSec;
+                        gameState.frog.x = Math.round(gameState.frog.pixelX / CELL_SIZE);
+                        
+                        // 画面端に流されたらミス
+                        if (gameState.frog.x < 0 || gameState.frog.x >= COLS) {
+                            resetFrog();
+                        }
+                        break;
+                    }
+                }
+                if (!onLog) {
+                    resetFrog(); // 水に落ちた
+                    return;
+                }
+            } else {
+                // 水以外の場所ではピクセル座標をグリッドに同期
+                gameState.frog.pixelX = gameState.frog.x * CELL_SIZE;
+            }
+        }
+
+        // --- 描画ロジック ---
+        function drawSprite(spriteArray, gridX, gridY, direction, color = null, scaleX = 1) {
+            const pxSize = CELL_SIZE / 8;
+            ctx.save();
+            ctx.translate(gridX * CELL_SIZE + (CELL_SIZE * scaleX) / 2, gridY * CELL_SIZE + CELL_SIZE / 2);
+            ctx.rotate((direction * 90) * Math.PI / 180);
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8 * scaleX; c++) {
+                    const colorIndex = spriteArray[r][c % 8];
+                    if (colorIndex !== 0) {
+                        ctx.fillStyle = (colorIndex === 5 && color) ? color : palette[colorIndex];
+                        ctx.fillRect((c - (4 * scaleX)) * pxSize, (r - 4) * pxSize, pxSize, pxSize);
+                    }
+                }
+            }
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 背景
+            ctx.fillStyle = '#004400'; ctx.fillRect(0, 0, canvas.width, CELL_SIZE); // Goal
+            ctx.fillStyle = '#000066'; ctx.fillRect(0, CELL_SIZE, canvas.width, CELL_SIZE * 5); // Water
+            ctx.fillStyle = '#442200'; ctx.fillRect(0, CELL_SIZE * 6, canvas.width, CELL_SIZE * 1); // Middle
+            ctx.fillStyle = '#222'; ctx.fillRect(0, CELL_SIZE * 7, canvas.width, CELL_SIZE * 7); // Road
+            ctx.fillStyle = '#004400'; ctx.fillRect(0, CELL_SIZE * 14, canvas.width, CELL_SIZE); // Start
+
+            // 丸太の描画 (2マス幅)
+            gameState.logs.forEach(log => drawSprite(logSprite, log.x, log.y, 0, null, 2));
+            
+            // 車の描画
+            gameState.cars.forEach(car => drawSprite(carSprite, car.x, car.y, car.speed > 0 ? 0 : 2, car.color));
+
+            // カエルの描画
+            drawSprite(frogSprites[gameState.frog.frame], gameState.frog.pixelX / CELL_SIZE, gameState.frog.y, gameState.frog.direction);
+
+            // ステータス表示
+            if (gameState.status === 'win') {
+                ctx.fillStyle = '#FFF'; ctx.font = '24px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('GOAL!!', canvas.width / 2, canvas.height / 2);
+            }
+        }
+
+        initLanes();
+        requestAnimationFrame(function loop(t) {
+            update(t - gameState.lastTime);
+            gameState.lastTime = t;
+            draw();
+            requestAnimationFrame(loop);
+        });
+    </script>
+</body>
+</html>
 
