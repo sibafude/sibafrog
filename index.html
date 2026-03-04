@@ -3,316 +3,528 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>フロッガー - ステップ4: 川とゴール</title>
+    <title>Frogger Arcade Fullscreen</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            background-color: #222;
+            background-color: #000;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
+            width: 100vw;
             overflow: hidden;
-            touch-action: none;
+            touch-action: none; /* スワイプによる画面スクロールを防止 */
+            font-family: 'Courier New', Courier, monospace;
         }
         #gameCanvas {
             background-color: #000;
-            max-width: 100%;
-            max-height: 100%;
-            aspect-ratio: 320 / 480; 
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
-            image-rendering: pixelated;
+            /* 画面いっぱいに広げつつ、アーケードの比率(14:16)を維持 */
+            width: 100%;
+            height: 100%;
+            object-fit: contain; 
+            image-rendering: pixelated; /* ドット絵をくっきり表示 */
+            image-rendering: crisp-edges;
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>eruda.init();</script>
 </head>
 <body>
 
-    <canvas id="gameCanvas" width="320" height="480"></canvas>
+    <canvas id="gameCanvas" width="224" height="256"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        const CELL_SIZE = 32;
-        const COLS = 10;
-        const ROWS = 15;
+        // アーケード解像度: 224x256
+        const GRID_SIZE = 16;
+        const COLS = 14;
+        const ROWS = 16;
 
-        // --- 1. アセットデータ ---
-        const frogSprites = {
-            idle: [
-                [0, 0, 1, 1, 1, 1, 0, 0], [0, 3, 4, 1, 1, 3, 4, 0],
-                [1, 1, 1, 1, 1, 1, 1, 1], [1, 2, 2, 2, 2, 2, 2, 1],
-                [1, 1, 1, 1, 1, 1, 1, 1], [0, 1, 1, 1, 1, 1, 1, 0],
-                [0, 1, 0, 0, 0, 0, 1, 0], [1, 1, 0, 0, 0, 0, 1, 1]
+        // ==========================================
+        // ★ ドット絵スプライトデータ (8x8を2倍表示) ★
+        // ==========================================
+        // 0:透明, 1:緑(カエル), 2:黄緑(カエル背中), 3:赤(カメ顔/車), 4:緑(カメ甲羅), 5:茶(丸太), 6:濃茶(丸太線), 7:黄(車), 8:紫(車), 9:白(車/線), A:青, B:水色
+        const P = { 0: null, 1: '#00D800', 2: '#FFFF00', 3: '#FF0000', 4: '#00AA00', 5: '#AA5500', 6: '#552200', 7: '#FFFF00', 8: '#AA00FF', 9: '#FFFFFF', 10: '#000088', 11: '#00FFFF' };
+
+        const sprites = {
+            frog_up: [
+                [0,1,1,0,0,1,1,0],
+                [1,1,1,1,1,1,1,1],
+                [0,1,1,1,1,1,1,0],
+                [0,0,2,2,2,2,0,0],
+                [0,0,2,2,2,2,0,0],
+                [0,1,1,1,1,1,1,0],
+                [1,1,0,0,0,0,1,1],
+                [1,0,0,0,0,0,0,1]
             ],
-            jump: [
-                [0, 0, 1, 1, 1, 1, 0, 0], [0, 3, 4, 1, 1, 3, 4, 0],
-                [1, 1, 1, 1, 1, 1, 1, 1], [1, 2, 2, 2, 2, 2, 2, 1],
-                [0, 1, 1, 1, 1, 1, 1, 0], [1, 1, 0, 0, 0, 0, 1, 1],
-                [1, 0, 0, 0, 0, 0, 0, 1], [1, 0, 0, 0, 0, 0, 0, 1]
+            turtle: [ // カメ（左向き）
+                [0,0,3,3,0,0,0,0],
+                [0,3,4,4,4,4,0,0],
+                [3,4,4,4,4,4,4,3],
+                [0,4,4,4,4,4,4,0],
+                [0,4,4,4,4,4,4,0],
+                [3,4,4,4,4,4,4,3],
+                [0,3,4,4,4,4,0,0],
+                [0,0,3,3,0,0,0,0]
+            ],
+            turtle_dive: [ // 沈みかけのカメ
+                [0,0,0,0,0,0,0,0],
+                [0,0,11,11,11,11,0,0],
+                [0,11,10,10,10,10,11,0],
+                [0,11,10,10,10,10,11,0],
+                [0,11,10,10,10,10,11,0],
+                [0,11,10,10,10,10,11,0],
+                [0,0,11,11,11,11,0,0],
+                [0,0,0,0,0,0,0,0]
+            ],
+            car_yellow: [ // 黄色いレースカー
+                [0,0,0,0,0,0,0,0],
+                [0,3,3,0,0,3,3,0],
+                [7,7,7,7,7,7,7,7],
+                [7,7,7,8,8,7,7,7],
+                [7,7,7,8,8,7,7,7],
+                [7,7,7,7,7,7,7,7],
+                [0,3,3,0,0,3,3,0],
+                [0,0,0,0,0,0,0,0]
+            ],
+            car_white: [ // 白いブルドーザー風
+                [0,0,0,0,0,0,0,0],
+                [0,9,9,9,9,9,9,0],
+                [3,9,9,11,11,9,9,9],
+                [3,9,9,11,11,9,9,9],
+                [3,9,9,11,11,9,9,9],
+                [3,9,9,11,11,9,9,9],
+                [0,9,9,9,9,9,9,0],
+                [0,0,0,0,0,0,0,0]
+            ],
+            car_purple: [ // 紫の車
+                [0,0,0,0,0,0,0,0],
+                [0,11,11,0,0,11,11,0],
+                [8,8,8,8,8,8,8,8],
+                [8,8,9,9,9,9,8,8],
+                [8,8,9,9,9,9,8,8],
+                [8,8,8,8,8,8,8,8],
+                [0,11,11,0,0,11,11,0],
+                [0,0,0,0,0,0,0,0]
+            ],
+            truck: [ // トラック（2マス分使うので前半分）
+                [0,0,0,0,0,0,0,0],
+                [9,9,9,9,9,9,9,9],
+                [9,9,9,9,9,9,9,9],
+                [9,9,9,9,9,9,9,9],
+                [9,9,9,9,9,9,9,9],
+                [9,9,9,9,9,9,9,9],
+                [9,9,9,9,9,9,9,9],
+                [0,0,0,0,0,0,0,0]
             ]
         };
-        const carSprite = [
-            [0, 0, 0, 0, 0, 0, 0, 0], [0, 5, 5, 5, 5, 5, 0, 0],
-            [5, 5, 6, 6, 6, 5, 5, 0], [5, 5, 5, 5, 5, 5, 5, 5],
-            [5, 5, 5, 5, 5, 5, 5, 5], [0, 4, 0, 0, 0, 4, 0, 0],
-            [0, 4, 0, 0, 0, 4, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]
-        ];
-        // 丸太のドット絵 (8x8)
-        const logSprite = [
-            [0, 7, 7, 7, 7, 7, 7, 0], [7, 7, 8, 7, 7, 8, 7, 7],
-            [7, 8, 7, 7, 7, 7, 8, 7], [7, 7, 7, 8, 7, 7, 7, 7],
-            [7, 7, 7, 7, 7, 8, 7, 7], [7, 8, 7, 7, 8, 7, 7, 7],
-            [7, 7, 8, 7, 7, 7, 8, 7], [0, 7, 7, 7, 7, 7, 7, 0]
-        ];
-        
-        // パレット拡張 7:丸太(茶色), 8:丸太の模様(濃い茶)
-        const palette = [null, '#00FF00', '#ADFF2F', '#FFFFFF', '#000000', '#FF3333', '#88CCFF', '#8B4513', '#5D2E0A'];
 
-        const gameState = {
-            lastTime: 0,
-            frog: { 
-                x: 4, y: 14, 
-                pixelX: 4 * CELL_SIZE, pixelY: 14 * CELL_SIZE, // 滑らかな移動（丸太用）
-                frame: 'idle', animTimer: 0, direction: 0 
-            },
-            input: { dx: 0, dy: 0 },
-            moveTimer: 0,
-            MOVE_INTERVAL: 180,
-            cars: [],
-            logs: [],
-            lanes: [],
-            status: 'playing', // playing, win, die
-            score: 0
+        function drawSprite(ctx, sprite, x, y, scale = 2) {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const colorId = sprite[r][c];
+                    if (colorId !== 0) {
+                        ctx.fillStyle = P[colorId];
+                        ctx.fillRect(x + c * scale, y + r * scale, scale, scale);
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // ★ サウンド・システム (BGM & SE) ★
+        // ==========================================
+        let audioCtx;
+        let bgmOscillator = null;
+        let bgmInterval = null;
+        let isAudioPlaying = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSfx(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+
+            if (type === 'jump') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'die') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now); osc.stop(now + 0.5);
+            } else if (type === 'goal') {
+                osc.type = 'square';
+                [659.25, 783.99, 1046.50].forEach((f, i) => osc.frequency.setValueAtTime(f, now + i * 0.1));
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'start') {
+                osc.type = 'square';
+                const melody = [523, 659, 784, 1046, 784, 1046];
+                melody.forEach((f, i) => {
+                    osc.frequency.setValueAtTime(f, now + i * 0.15);
+                    gain.gain.setValueAtTime(0.05, now + i * 0.15);
+                    gain.gain.setValueAtTime(0, now + i * 0.15 + 0.1);
+                });
+                osc.start(now); osc.stop(now + melody.length * 0.15);
+            }
+        }
+
+        // BGMシーケンサー
+        const bgmNotes = [
+            261, 0, 329, 0, 392, 0, 329, 0,
+            349, 0, 440, 0, 523, 0, 440, 0,
+            392, 0, 329, 0, 261, 0, 329, 0,
+            293, 0, 392, 0, 293, 0, 392, 0
+        ];
+        let bgmStep = 0;
+
+        function startBGM() {
+            if (!audioCtx || isAudioPlaying) return;
+            isAudioPlaying = true;
+            bgmInterval = setInterval(() => {
+                if (state.status !== 'playing') return;
+                const freq = bgmNotes[bgmStep % bgmNotes.length];
+                bgmStep++;
+                if (freq > 0) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                    osc.connect(gain); gain.connect(audioCtx.destination);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+                }
+            }, 150);
+        }
+
+        function stopBGM() {
+            isAudioPlaying = false;
+            if (bgmInterval) clearInterval(bgmInterval);
+        }
+
+        // ==========================================
+        // ★ ゲームロジック ★
+        // ==========================================
+        const state = {
+            frog: { x: 7, y: 14, pixelX: 7 * GRID_SIZE, dir: 0 },
+            objects: [], 
+            goals: [false, false, false, false, false],
+            timer: 1.0, score: 0, lives: 3, level: 1, highscore: 10000,
+            status: 'title', // title, playing, dying, won
+            tick: 0
         };
 
         function resetFrog() {
-            gameState.frog.x = 4;
-            gameState.frog.y = 14;
-            gameState.frog.pixelX = 4 * CELL_SIZE;
-            gameState.frog.pixelY = 14 * CELL_SIZE;
-            gameState.frog.direction = 0;
-            gameState.frog.frame = 'idle';
-            gameState.status = 'playing';
+            state.frog = { x: 7, y: 13, pixelX: 7 * GRID_SIZE, dir: 0 };
+            state.timer = 1.0;
+            state.status = 'playing';
+            startBGM();
         }
 
-        function initLanes() {
-            gameState.lanes = [
-                // 川セクション (丸太) - 行 1 〜 5
-                { y: 1, type: 'log', speed: -30, spawnRate: 0.01 },
-                { y: 2, type: 'log', speed:  50, spawnRate: 0.008 },
-                { y: 3, type: 'log', speed: -45, spawnRate: 0.012 },
-                { y: 4, type: 'log', speed:  35, spawnRate: 0.009 },
-                { y: 5, type: 'log', speed:  60, spawnRate: 0.007 },
-                // 道路セクション (車) - 行 8 〜 12
-                { y: 8,  type: 'car', speed: -40, spawnRate: 0.01,  color: '#FF3333' },
-                { y: 9,  type: 'car', speed:  55, spawnRate: 0.008, color: '#33FF33' },
-                { y: 10, type: 'car', speed: -70, spawnRate: 0.015, color: '#FF33FF' },
-                { y: 11, type: 'car', speed:  40, spawnRate: 0.012, color: '#FFFF33' },
-                { y: 12, type: 'car', speed: -90, spawnRate: 0.006, color: '#33FFFF' }
+        function spawnObjects() {
+            state.objects = [];
+            const laneConfigs = [
+                { y: 2, type: 'log', speed: 1.2, len: 3 },
+                { y: 3, type: 'turtle', speed: -1.0, len: 3, diveRate: 0.3 },
+                { y: 4, type: 'log', speed: 2.0, len: 6 },
+                { y: 5, type: 'log', speed: 1.5, len: 2 },
+                { y: 6, type: 'turtle', speed: -1.2, len: 2, diveRate: 0.5 },
+                { y: 8,  type: 'truck', speed: -1.0, len: 2 },
+                { y: 9,  type: 'car_purple', speed: 1.5, len: 1 },
+                { y: 10, type: 'car_white', speed: -1.2, len: 1 },
+                { y: 11, type: 'car_white', speed: 1.8, len: 1 },
+                { y: 12, type: 'car_yellow', speed: -1.5, len: 1 }
             ];
-        }
 
-        // --- 入力処理 ---
-        function moveFrog(dx, dy) {
-            if (gameState.status !== 'playing') return;
-
-            const newX = gameState.frog.x + dx;
-            const newY = gameState.frog.y + dy;
-
-            if (dx > 0) gameState.frog.direction = 1;
-            else if (dx < 0) gameState.frog.direction = 3;
-            else if (dy > 0) gameState.frog.direction = 2;
-            else if (dy < 0) gameState.frog.direction = 0;
-
-            if (newX >= 0 && newX < COLS) gameState.frog.x = newX;
-            if (newY >= 0 && newY < ROWS) gameState.frog.y = newY;
-
-            // グリッド移動直後にピクセル座標も同期（瞬間移動感）
-            gameState.frog.pixelX = gameState.frog.x * CELL_SIZE;
-            gameState.frog.pixelY = gameState.frog.y * CELL_SIZE;
-
-            gameState.frog.frame = 'jump';
-            gameState.frog.animTimer = 100;
-        }
-
-        // 入力イベント設定 (前ステップと同様)
-        let touchStartX = 0, touchStartY = 0;
-        const DEADZONE = 20;
-
-        window.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; touchStartY = e.changedTouches[0].screenY; }, { passive: false });
-        window.addEventListener('touchmove', e => {
-            e.preventDefault();
-            const dx = e.changedTouches[0].screenX - touchStartX;
-            const dy = e.changedTouches[0].screenY - touchStartY;
-            if (Math.abs(dx) > DEADZONE || Math.abs(dy) > DEADZONE) {
-                if (Math.abs(dx) > Math.abs(dy)) setInput(dx > 0 ? 1 : -1, 0);
-                else setInput(0, dy > 0 ? 1 : -1);
-            } else setInput(0, 0);
-        }, { passive: false });
-        window.addEventListener('touchend', () => setInput(0, 0));
-        window.addEventListener('keydown', e => {
-            if (e.key === 'ArrowUp') setInput(0, -1);
-            else if (e.key === 'ArrowDown') setInput(0, 1);
-            else if (e.key === 'ArrowLeft') setInput(-1, 0);
-            else if (e.key === 'ArrowRight') setInput(1, 0);
-        });
-        window.addEventListener('keyup', e => { if (e.key.startsWith('Arrow')) setInput(0, 0); });
-
-        function setInput(dx, dy) {
-            if ((dx !== 0 || dy !== 0) && (gameState.input.dx !== dx || gameState.input.dy !== dy)) {
-                moveFrog(dx, dy);
-                gameState.moveTimer = 0;
-            }
-            gameState.input.dx = dx;
-            gameState.input.dy = dy;
-        }
-
-        // --- 更新ロジック ---
-        function update(deltaTime) {
-            if (gameState.status !== 'playing') return;
-            const dtSec = deltaTime / 1000;
-
-            // 1. カエルの連続移動入力
-            if (gameState.input.dx !== 0 || gameState.input.dy !== 0) {
-                gameState.moveTimer += deltaTime;
-                if (gameState.moveTimer >= gameState.MOVE_INTERVAL) {
-                    moveFrog(gameState.input.dx, gameState.input.dy);
-                    gameState.moveTimer = 0;
-                }
-            }
-            if (gameState.frog.animTimer > 0) {
-                gameState.frog.animTimer -= deltaTime;
-                if (gameState.frog.animTimer <= 0) gameState.frog.frame = 'idle';
-            }
-
-            // 2. オブジェクト生成・移動
-            gameState.lanes.forEach(lane => {
-                if (Math.random() < lane.spawnRate) {
-                    const list = lane.type === 'car' ? gameState.cars : gameState.logs;
-                    const canSpawn = !list.some(obj => obj.y === lane.y && ((lane.speed > 0 && obj.x < 2) || (lane.speed < 0 && obj.x > COLS - 3)));
-                    if (canSpawn) {
-                        list.push({ x: lane.speed > 0 ? -2 : COLS + 1, y: lane.y, speed: lane.speed, type: lane.type, color: lane.color || null });
-                    }
+            laneConfigs.forEach(cfg => {
+                const num = cfg.type.includes('log') ? 3 : (cfg.type.includes('car') ? 3 : 4);
+                for (let i = 0; i < num; i++) {
+                    state.objects.push({
+                        x: i * (COLS / num) + Math.random() * 2,
+                        y: cfg.y,
+                        type: cfg.type,
+                        speed: cfg.speed * (1 + (state.level - 1) * 0.1),
+                        len: cfg.len,
+                        timer: Math.random() * 100,
+                        diveRate: cfg.diveRate || 0,
+                        diving: false
+                    });
                 }
             });
+        }
 
-            [gameState.cars, gameState.logs].forEach(list => {
-                for (let i = list.length - 1; i >= 0; i--) {
-                    const obj = list[i];
-                    obj.x += (obj.speed / CELL_SIZE) * dtSec;
-                    if (obj.x > COLS + 2 || obj.x < -3) list.splice(i, 1);
-                }
-            });
+        function kill() {
+            state.status = 'dying';
+            stopBGM();
+            playSfx('die');
+            state.lives--;
+            setTimeout(() => {
+                if (state.lives > 0) resetFrog();
+                else state.status = 'title';
+            }, 1500);
+        }
 
-            // 3. 当たり判定 & ギミック
-            const fx = gameState.frog.x;
-            const fy = gameState.frog.y;
-
-            // ゴール判定
-            if (fy === 0) {
-                gameState.status = 'win';
+        function winGoal(idx) {
+            state.goals[idx] = true;
+            state.score += 50 + Math.floor(state.timer * 1000);
+            if (state.score > state.highscore) state.highscore = state.score;
+            stopBGM();
+            playSfx('goal');
+            
+            if (state.goals.every(g => g)) {
+                state.status = 'won';
+                setTimeout(() => {
+                    state.level++;
+                    state.goals = [false, false, false, false, false];
+                    spawnObjects();
+                    resetFrog();
+                }, 2000);
+            } else {
+                state.status = 'won';
                 setTimeout(resetFrog, 1000);
-                return;
             }
+        }
 
-            // 道路エリア判定
+        function update() {
+            if (state.status !== 'playing') return;
+
+            state.tick++;
+            state.timer -= 0.0003; 
+            if (state.timer <= 0) kill();
+
+            state.objects.forEach(obj => {
+                obj.x += obj.speed * 0.02;
+                if (obj.speed > 0 && obj.x > COLS + 1) obj.x = -obj.len;
+                if (obj.speed < 0 && obj.x < -obj.len - 1) obj.x = COLS + 1;
+                
+                if (obj.type === 'turtle' && obj.diveRate > 0) {
+                    obj.timer += 1;
+                    const cycle = obj.timer % 300;
+                    obj.diving = (cycle > 200 && cycle < 280); 
+                }
+            });
+
+            const fx = state.frog.x;
+            const fy = state.frog.y;
+
             if (fy >= 8 && fy <= 12) {
-                for (const car of gameState.cars) {
-                    if (car.y === fy && Math.abs(car.x - fx) < 0.7) {
-                        resetFrog();
-                        return;
-                    }
-                }
+                state.objects.filter(o => o.y === fy).forEach(car => {
+                    if (fx > car.x - 0.7 && fx < car.x + car.len - 0.3) kill();
+                });
             }
 
-            // 川エリア判定 (丸太に乗る)
-            if (fy >= 1 && fy <= 5) {
-                let onLog = false;
-                for (const log of gameState.logs) {
-                    // 丸太は2マス分の幅があると想定して判定
-                    if (log.y === fy && fx >= log.x - 0.5 && fx <= log.x + 1.5) {
-                        onLog = true;
-                        // 丸太と一緒に流される（ピクセルではなくグリッド座標を更新）
-                        // ※簡易化のため、一定距離流れたら隣のグリッドへ。
-                        const moveStep = (log.speed / CELL_SIZE) * dtSec;
-                        gameState.frog.pixelX += log.speed * dtSec;
-                        gameState.frog.x = Math.round(gameState.frog.pixelX / CELL_SIZE);
-                        
-                        // 画面端に流されたらミス
-                        if (gameState.frog.x < 0 || gameState.frog.x >= COLS) {
-                            resetFrog();
-                        }
-                        break;
+            if (fy >= 2 && fy <= 6) {
+                let riding = null;
+                state.objects.filter(o => o.y === fy).forEach(obj => {
+                    if (fx >= obj.x - 0.5 && fx <= obj.x + obj.len - 0.5) {
+                        if (obj.type === 'turtle' && obj.diving) return; 
+                        riding = obj;
                     }
-                }
-                if (!onLog) {
-                    resetFrog(); // 水に落ちた
-                    return;
+                });
+
+                if (riding) {
+                    state.frog.pixelX += riding.speed * 0.02 * GRID_SIZE;
+                    state.frog.x = Math.round(state.frog.pixelX / GRID_SIZE);
+                    if (state.frog.x < 0 || state.frog.x >= COLS) kill();
+                } else {
+                    kill(); 
                 }
             } else {
-                // 水以外の場所ではピクセル座標をグリッドに同期
-                gameState.frog.pixelX = gameState.frog.x * CELL_SIZE;
+                state.frog.pixelX = state.frog.x * GRID_SIZE;
+            }
+
+            if (fy === 1) {
+                const goalIdx = Math.floor(fx / 3); 
+                const modX = fx % 3;
+                if (modX === 1 && goalIdx < 5 && !state.goals[goalIdx]) {
+                    winGoal(goalIdx);
+                } else {
+                    kill(); 
+                }
             }
         }
 
-        // --- 描画ロジック ---
-        function drawSprite(spriteArray, gridX, gridY, direction, color = null, scaleX = 1) {
-            const pxSize = CELL_SIZE / 8;
-            ctx.save();
-            ctx.translate(gridX * CELL_SIZE + (CELL_SIZE * scaleX) / 2, gridY * CELL_SIZE + CELL_SIZE / 2);
-            ctx.rotate((direction * 90) * Math.PI / 180);
-
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8 * scaleX; c++) {
-                    const colorIndex = spriteArray[r][c % 8];
-                    if (colorIndex !== 0) {
-                        ctx.fillStyle = (colorIndex === 5 && color) ? color : palette[colorIndex];
-                        ctx.fillRect((c - (4 * scaleX)) * pxSize, (r - 4) * pxSize, pxSize, pxSize);
-                    }
+        // ==========================================
+        // ★ 描画ロジック ★
+        // ==========================================
+        function drawPattern(ctx, color1, color2, y, height) {
+            ctx.fillStyle = color1;
+            ctx.fillRect(0, y, canvas.width, height);
+            ctx.fillStyle = color2;
+            for(let i=0; i<COLS*2; i++) {
+                for(let j=0; j<height/8; j++) {
+                    if ((i+j)%2===0) ctx.fillRect(i*8, y+j*8, 4, 4);
                 }
             }
-            ctx.restore();
         }
 
         function draw() {
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#000055'; ctx.fillRect(0, GRID_SIZE * 1, canvas.width, GRID_SIZE * 6);
+            drawPattern(ctx, '#8800AA', '#FF0000', GRID_SIZE * 7, GRID_SIZE);
+            drawPattern(ctx, '#8800AA', '#FF0000', GRID_SIZE * 13, GRID_SIZE);
+
+            drawPattern(ctx, '#00AA00', '#FF0000', GRID_SIZE * 1, GRID_SIZE);
+            for (let i = 0; i < 5; i++) {
+                ctx.fillStyle = '#000055';
+                ctx.fillRect((i * 3 + 1) * GRID_SIZE, GRID_SIZE, GRID_SIZE, GRID_SIZE);
+                if (state.goals[i]) drawSprite(ctx, sprites.frog_up, (i * 3 + 1) * GRID_SIZE, GRID_SIZE);
+            }
+
+            state.objects.forEach(obj => {
+                const px = obj.x * GRID_SIZE;
+                const py = obj.y * GRID_SIZE;
+                
+                if (obj.type === 'log') {
+                    ctx.fillStyle = '#AA5500'; ctx.fillRect(px, py + 2, obj.len * GRID_SIZE, 12);
+                    ctx.fillStyle = '#FFAA55'; ctx.fillRect(px, py + 2, 2, 12); 
+                    ctx.fillRect(px + obj.len * GRID_SIZE - 2, py + 2, 2, 12);
+                } else if (obj.type === 'turtle') {
+                    for (let i = 0; i < obj.len; i++) {
+                        drawSprite(ctx, obj.diving ? sprites.turtle_dive : sprites.turtle, px + i * GRID_SIZE, py);
+                    }
+                } else if (sprites[obj.type]) {
+                    drawSprite(ctx, sprites[obj.type], px, py);
+                    if (obj.len > 1) { 
+                        ctx.fillStyle = '#FFF'; ctx.fillRect(px + GRID_SIZE, py + 2, (obj.len - 1) * GRID_SIZE, 12);
+                    }
+                }
+            });
+
+            if (state.status !== 'dying') {
+                drawSprite(ctx, sprites.frog_up, state.frog.pixelX, state.frog.y * GRID_SIZE);
+            }
+
+            ctx.fillStyle = '#FFF'; ctx.font = 'bold 12px Courier'; ctx.textAlign = 'left';
+            ctx.fillText(`1-UP`, 20, 12);
+            ctx.fillStyle = '#F00'; ctx.fillText(state.score.toString().padStart(5, '0'), 15, 24);
             
-            // 背景
-            ctx.fillStyle = '#004400'; ctx.fillRect(0, 0, canvas.width, CELL_SIZE); // Goal
-            ctx.fillStyle = '#000066'; ctx.fillRect(0, CELL_SIZE, canvas.width, CELL_SIZE * 5); // Water
-            ctx.fillStyle = '#442200'; ctx.fillRect(0, CELL_SIZE * 6, canvas.width, CELL_SIZE * 1); // Middle
-            ctx.fillStyle = '#222'; ctx.fillRect(0, CELL_SIZE * 7, canvas.width, CELL_SIZE * 7); // Road
-            ctx.fillStyle = '#004400'; ctx.fillRect(0, CELL_SIZE * 14, canvas.width, CELL_SIZE); // Start
+            ctx.fillStyle = '#FFF'; ctx.textAlign = 'center';
+            ctx.fillText(`HI-SCORE`, canvas.width / 2, 12);
+            ctx.fillStyle = '#F00'; ctx.fillText(state.highscore.toString().padStart(5, '0'), canvas.width / 2, 24);
 
-            // 丸太の描画 (2マス幅)
-            gameState.logs.forEach(log => drawSprite(logSprite, log.x, log.y, 0, null, 2));
-            
-            // 車の描画
-            gameState.cars.forEach(car => drawSprite(carSprite, car.x, car.y, car.speed > 0 ? 0 : 2, car.color));
+            ctx.fillStyle = '#FF0';
+            ctx.fillRect(canvas.width - 100, canvas.height - 10, 90 * state.timer, 8);
+            ctx.fillStyle = '#0F0'; ctx.textAlign = 'right';
+            ctx.fillText("TIME", canvas.width - 105, canvas.height - 2);
 
-            // カエルの描画
-            drawSprite(frogSprites[gameState.frog.frame], gameState.frog.pixelX / CELL_SIZE, gameState.frog.y, gameState.frog.direction);
+            for (let i = 0; i < state.lives - 1; i++) {
+                drawSprite(ctx, sprites.frog_up, i * 10, canvas.height - 12, 1);
+            }
 
-            // ステータス表示
-            if (gameState.status === 'win') {
-                ctx.fillStyle = '#FFF'; ctx.font = '24px sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText('GOAL!!', canvas.width / 2, canvas.height / 2);
+            if (state.status === 'title') {
+                ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+                ctx.fillStyle = '#0F0'; ctx.textAlign = 'center'; ctx.font = 'bold 20px Courier';
+                ctx.fillText("FROGGER", canvas.width/2, 100);
+                ctx.fillStyle = '#FFF'; ctx.font = '12px Courier';
+                ctx.fillText("SWIPE TO START", canvas.width/2, 140);
             }
         }
 
-        initLanes();
-        requestAnimationFrame(function loop(t) {
-            update(t - gameState.lastTime);
-            gameState.lastTime = t;
-            draw();
-            requestAnimationFrame(loop);
+        // ==========================================
+        // ★ 入力処理 (スワイプ連続入力対応) ★
+        // ==========================================
+        let touchStartX = 0, touchStartY = 0;
+        const DEADZONE = 25; // ここを調整すると連続入力の感度が変わります（小さいほど敏感）
+
+        window.addEventListener('touchstart', e => {
+            initAudio();
+            if (state.status === 'title') {
+                spawnObjects();
+                state.score = 0;
+                state.lives = 3;
+                state.level = 1;
+                state.goals = [false, false, false, false, false];
+                playSfx('start');
+                setTimeout(resetFrog, 1000);
+                return;
+            }
+            touchStartX = e.touches[0].screenX;
+            touchStartY = e.touches[0].screenY;
+        }, { passive: false });
+
+        window.addEventListener('touchmove', e => {
+            e.preventDefault(); // スクロール防止
+            if (state.status !== 'playing') return;
+
+            const touchX = e.touches[0].screenX;
+            const touchY = e.touches[0].screenY;
+            const dx = touchX - touchStartX;
+            const dy = touchY - touchStartY;
+            
+            // 一定距離(DEADZONE)以上指が動いたら移動コマンドを実行
+            if (Math.abs(dx) > DEADZONE || Math.abs(dy) > DEADZONE) {
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    moveFrog(dx > 0 ? 1 : -1, 0);
+                } else {
+                    moveFrog(0, dy > 0 ? 1 : -1);
+                }
+                
+                // ★連続入力のための魔法★
+                // 移動したら、指の現在の位置を新しい基準点にする
+                // これにより、指を離さずに動かし続けると連続でジャンプします
+                touchStartX = touchX;
+                touchStartY = touchY;
+            }
+        }, { passive: false });
+
+        // キーボード対応 (PC確認用)
+        window.addEventListener('keydown', e => {
+            initAudio();
+            if (state.status === 'title') { window.dispatchEvent(new Event('touchstart')); return; }
+            if (e.key === 'ArrowUp') moveFrog(0, -1);
+            else if (e.key === 'ArrowDown') moveFrog(0, 1);
+            else if (e.key === 'ArrowLeft') moveFrog(-1, 0);
+            else if (e.key === 'ArrowRight') moveFrog(1, 0);
         });
+
+        function moveFrog(dx, dy) {
+            if (state.status !== 'playing') return;
+            state.frog.x = Math.max(0, Math.min(COLS - 1, state.frog.x + dx));
+            state.frog.y = Math.max(1, Math.min(ROWS - 1, state.frog.y + dy));
+            state.frog.pixelX = state.frog.x * GRID_SIZE;
+            playSfx('jump');
+            if (dy < 0) state.score += 10;
+        }
+
+        // ==========================================
+        // ★ メインループ ★
+        // ==========================================
+        let lastTime = 0;
+        function loop(timestamp) {
+            if (timestamp - lastTime >= 16) { 
+                update();
+                draw();
+                lastTime = timestamp;
+            }
+            requestAnimationFrame(loop);
+        }
+        
+        spawnObjects();
+        draw(); 
+        requestAnimationFrame(loop);
     </script>
 </body>
 </html>
+
 
