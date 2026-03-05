@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Frogger Arcade Fullscreen</title>
     <style>
+        /* 拡大鏡、テキスト選択、スクロールなどスマホのデフォルト動作を完全ブロック */
+        * {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            touch-action: none;
+        }
+        
         body {
             margin: 0;
             padding: 0;
@@ -15,21 +26,22 @@
             height: 100vh;
             width: 100vw;
             overflow: hidden;
-            touch-action: none; /* スワイプによる画面スクロールを防止 */
+            overscroll-behavior: none;
             font-family: 'Courier New', Courier, monospace;
         }
+        
         #gameCanvas {
             background-color: #000;
-            /* 画面いっぱいに広げつつ、アーケードの比率(14:16)を維持 */
             width: 100%;
             height: 100%;
             object-fit: contain; 
-            image-rendering: pixelated; /* ドット絵をくっきり表示 */
+            image-rendering: pixelated;
             image-rendering: crisp-edges;
+            outline: none;
         }
     </style>
 </head>
-<body>
+<body oncontextmenu="return false;"> <!-- 右クリックメニュー長押し防止 -->
 
     <canvas id="gameCanvas" width="224" height="256"></canvas>
 
@@ -45,81 +57,78 @@
         // ==========================================
         // ★ ドット絵スプライトデータ (8x8を2倍表示) ★
         // ==========================================
-        // 0:透明, 1:緑(カエル), 2:黄緑(カエル背中), 3:赤(カメ顔/車), 4:緑(カメ甲羅), 5:茶(丸太), 6:濃茶(丸太線), 7:黄(車), 8:紫(車), 9:白(車/線), A:青, B:水色
-        const P = { 0: null, 1: '#00D800', 2: '#FFFF00', 3: '#FF0000', 4: '#00AA00', 5: '#AA5500', 6: '#552200', 7: '#FFFF00', 8: '#AA00FF', 9: '#FFFFFF', 10: '#000088', 11: '#00FFFF' };
+        const P = { 
+            0: null, 1: '#00D800', 2: '#FFFF00', 3: '#FF0000', 4: '#00AA00', 
+            5: '#AA5500', 6: '#552200', 7: '#FFFF00', 8: '#AA00FF', 9: '#FFFFFF', 
+            10: '#000088', 11: '#00FFFF', 12: '#000000', 13: '#FFAA00' 
+        };
 
         const sprites = {
-            frog_up: [
-                [0,1,1,0,0,1,1,0],
-                [1,1,1,1,1,1,1,1],
-                [0,1,1,1,1,1,1,0],
-                [0,0,2,2,2,2,0,0],
-                [0,0,2,2,2,2,0,0],
-                [0,1,1,1,1,1,1,0],
-                [1,1,0,0,0,0,1,1],
-                [1,0,0,0,0,0,0,1]
+            frog_idle: [
+                [0,1,1,0,0,1,1,0], [1,1,1,1,1,1,1,1], [0,1,1,1,1,1,1,0], [0,0,2,2,2,2,0,0],
+                [0,0,2,2,2,2,0,0], [0,1,1,1,1,1,1,0], [1,1,0,0,0,0,1,1], [1,0,0,0,0,0,0,1]
             ],
-            turtle: [ // カメ（左向き）
-                [0,0,3,3,0,0,0,0],
-                [0,3,4,4,4,4,0,0],
-                [3,4,4,4,4,4,4,3],
-                [0,4,4,4,4,4,4,0],
-                [0,4,4,4,4,4,4,0],
-                [3,4,4,4,4,4,4,3],
-                [0,3,4,4,4,4,0,0],
-                [0,0,3,3,0,0,0,0]
+            frog_jump: [
+                [0,0,1,1,1,1,0,0], [0,1,1,1,1,1,1,0], [1,1,1,1,1,1,1,1], [0,1,2,2,2,2,1,0],
+                [0,1,2,2,2,2,1,0], [1,1,1,1,1,1,1,1], [0,1,1,0,0,1,1,0], [0,1,0,0,0,0,1,0]
             ],
-            turtle_dive: [ // 沈みかけのカメ
-                [0,0,0,0,0,0,0,0],
-                [0,0,11,11,11,11,0,0],
-                [0,11,10,10,10,10,11,0],
-                [0,11,10,10,10,10,11,0],
-                [0,11,10,10,10,10,11,0],
-                [0,11,10,10,10,10,11,0],
-                [0,0,11,11,11,11,0,0],
-                [0,0,0,0,0,0,0,0]
+            turtle: [
+                [0,0,3,3,0,0,0,0], [0,3,4,4,4,4,0,0], [3,4,4,1,1,4,4,3], [0,4,1,4,4,1,4,0],
+                [0,4,1,4,4,1,4,0], [3,4,4,1,1,4,4,3], [0,3,4,4,4,4,0,0], [0,0,3,3,0,0,0,0]
             ],
-            car_yellow: [ // 黄色いレースカー
-                [0,0,0,0,0,0,0,0],
-                [0,3,3,0,0,3,3,0],
-                [7,7,7,7,7,7,7,7],
-                [7,7,7,8,8,7,7,7],
-                [7,7,7,8,8,7,7,7],
-                [7,7,7,7,7,7,7,7],
-                [0,3,3,0,0,3,3,0],
-                [0,0,0,0,0,0,0,0]
+            turtle_dive: [
+                [0,0,0,0,0,0,0,0], [0,0,11,11,11,11,0,0], [0,11,10,10,10,10,11,0], [0,11,10,11,11,10,11,0],
+                [0,11,10,11,11,10,11,0], [0,11,10,10,10,10,11,0], [0,0,11,11,11,11,0,0], [0,0,0,0,0,0,0,0]
             ],
-            car_white: [ // 白いブルドーザー風
-                [0,0,0,0,0,0,0,0],
-                [0,9,9,9,9,9,9,0],
-                [3,9,9,11,11,9,9,9],
-                [3,9,9,11,11,9,9,9],
-                [3,9,9,11,11,9,9,9],
-                [3,9,9,11,11,9,9,9],
-                [0,9,9,9,9,9,9,0],
-                [0,0,0,0,0,0,0,0]
+            car_yellow: [
+                [0,0,0,0,0,0,0,0], [0,12,12,0,0,12,12,0], [7,7,7,7,7,7,7,7], [7,7,12,8,8,12,7,7],
+                [7,7,12,8,8,12,7,7], [7,7,7,7,7,7,7,7], [0,12,12,0,0,12,12,0], [0,0,0,0,0,0,0,0]
             ],
-            car_purple: [ // 紫の車
-                [0,0,0,0,0,0,0,0],
-                [0,11,11,0,0,11,11,0],
-                [8,8,8,8,8,8,8,8],
-                [8,8,9,9,9,9,8,8],
-                [8,8,9,9,9,9,8,8],
-                [8,8,8,8,8,8,8,8],
-                [0,11,11,0,0,11,11,0],
-                [0,0,0,0,0,0,0,0]
+            car_white: [
+                [0,0,0,0,0,0,0,0], [0,9,9,9,9,9,9,0], [13,9,9,12,12,9,9,9], [13,9,9,12,12,9,9,9],
+                [13,9,9,12,12,9,9,9], [13,9,9,12,12,9,9,9], [0,9,9,9,9,9,9,0], [0,0,0,0,0,0,0,0]
             ],
-            truck: [ // トラック（2マス分使うので前半分）
-                [0,0,0,0,0,0,0,0],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [0,0,0,0,0,0,0,0]
+            car_purple: [
+                [0,0,0,0,0,0,0,0], [0,12,12,0,0,12,12,0], [8,8,8,8,8,8,8,8], [8,8,9,9,9,9,8,8],
+                [8,8,9,9,9,9,8,8], [8,8,8,8,8,8,8,8], [0,12,12,0,0,12,12,0], [0,0,0,0,0,0,0,0]
+            ],
+            truck_front: [
+                [0,0,0,0,0,0,0,0], [13,9,9,9,9,9,9,9], [13,9,12,12,12,9,9,9], [13,9,12,12,12,9,9,9],
+                [13,9,12,12,12,9,9,9], [13,9,12,12,12,9,9,9], [13,9,9,9,9,9,9,9], [0,0,0,0,0,0,0,0]
+            ],
+            truck_back: [
+                [0,0,0,0,0,0,0,0], [9,9,9,9,9,9,9,9], [9,9,9,9,9,9,9,9], [9,9,9,9,9,9,9,9],
+                [9,9,9,9,9,9,9,9], [9,9,9,9,9,9,9,9], [9,9,9,9,9,9,9,9], [0,0,0,0,0,0,0,0]
+            ],
+            log: [
+                [0,0,0,0,0,0,0,0], [5,5,5,5,5,5,5,5], [6,5,5,5,6,5,5,5], [5,5,6,5,5,5,6,5],
+                [5,5,5,5,6,5,5,5], [6,5,5,5,5,5,5,5], [5,5,5,5,5,5,5,5], [0,0,0,0,0,0,0,0]
+            ],
+            log_end_l: [
+                [0,0,0,0,0,0,0,0], [0,13,5,5,5,5,5,5], [13,13,5,5,5,6,5,5], [13,13,6,5,5,5,6,5],
+                [13,13,5,5,6,5,5,5], [0,13,5,5,5,5,5,5], [0,0,5,5,5,5,5,5], [0,0,0,0,0,0,0,0]
+            ],
+            log_end_r: [
+                [0,0,0,0,0,0,0,0], [5,5,5,5,5,5,13,0], [5,5,5,5,6,5,13,13], [6,5,5,5,5,6,13,13],
+                [5,5,6,5,5,5,13,13], [5,5,5,5,5,5,13,0], [5,5,5,5,5,5,0,0], [0,0,0,0,0,0,0,0]
             ]
         };
+
+        function drawSpriteRotated(ctx, sprite, x, y, rotation = 0, scale = 2) {
+            ctx.save();
+            ctx.translate(x + 8, y + 8); 
+            ctx.rotate(rotation * Math.PI / 180);
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const colorId = sprite[r][c];
+                    if (colorId !== 0) {
+                        ctx.fillStyle = P[colorId];
+                        ctx.fillRect((c - 4) * scale, (r - 4) * scale, scale, scale);
+                    }
+                }
+            }
+            ctx.restore();
+        }
 
         function drawSprite(ctx, sprite, x, y, scale = 2) {
             for (let r = 0; r < 8; r++) {
@@ -137,7 +146,6 @@
         // ★ サウンド・システム (BGM & SE) ★
         // ==========================================
         let audioCtx;
-        let bgmOscillator = null;
         let bgmInterval = null;
         let isAudioPlaying = false;
 
@@ -159,14 +167,14 @@
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(300, now);
                 osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
-                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.setValueAtTime(0.08, now); 
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
                 osc.start(now); osc.stop(now + 0.1);
             } else if (type === 'die') {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(150, now);
                 osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
-                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.setValueAtTime(0.15, now);
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
                 osc.start(now); osc.stop(now + 0.5);
             } else if (type === 'goal') {
@@ -180,14 +188,13 @@
                 const melody = [523, 659, 784, 1046, 784, 1046];
                 melody.forEach((f, i) => {
                     osc.frequency.setValueAtTime(f, now + i * 0.15);
-                    gain.gain.setValueAtTime(0.05, now + i * 0.15);
+                    gain.gain.setValueAtTime(0.1, now + i * 0.15); 
                     gain.gain.setValueAtTime(0, now + i * 0.15 + 0.1);
                 });
                 osc.start(now); osc.stop(now + melody.length * 0.15);
             }
         }
 
-        // BGMシーケンサー
         const bgmNotes = [
             261, 0, 329, 0, 392, 0, 329, 0,
             349, 0, 440, 0, 523, 0, 440, 0,
@@ -208,7 +215,8 @@
                     const gain = audioCtx.createGain();
                     osc.type = 'triangle';
                     osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                    gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                    // ★ BGM音量をアップ (0.05 -> 0.12)
+                    gain.gain.setValueAtTime(0.12, audioCtx.currentTime); 
                     gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
                     osc.connect(gain); gain.connect(audioCtx.destination);
                     osc.start(); osc.stop(audioCtx.currentTime + 0.15);
@@ -225,16 +233,16 @@
         // ★ ゲームロジック ★
         // ==========================================
         const state = {
-            frog: { x: 7, y: 14, pixelX: 7 * GRID_SIZE, dir: 0 },
+            frog: { x: 7, y: 14, pixelX: 7 * GRID_SIZE, rotation: 0, jumpTimer: 0 },
             objects: [], 
             goals: [false, false, false, false, false],
             timer: 1.0, score: 0, lives: 3, level: 1, highscore: 10000,
-            status: 'title', // title, playing, dying, won
+            status: 'title',
             tick: 0
         };
 
         function resetFrog() {
-            state.frog = { x: 7, y: 13, pixelX: 7 * GRID_SIZE, dir: 0 };
+            state.frog = { x: 7, y: 13, pixelX: 7 * GRID_SIZE, rotation: 0, jumpTimer: 0 };
             state.timer = 1.0;
             state.status = 'playing';
             startBGM();
@@ -245,7 +253,7 @@
             const laneConfigs = [
                 { y: 2, type: 'log', speed: 1.2, len: 3 },
                 { y: 3, type: 'turtle', speed: -1.0, len: 3, diveRate: 0.3 },
-                { y: 4, type: 'log', speed: 2.0, len: 6 },
+                { y: 4, type: 'log', speed: 2.5, len: 7 }, 
                 { y: 5, type: 'log', speed: 1.5, len: 2 },
                 { y: 6, type: 'turtle', speed: -1.2, len: 2, diveRate: 0.5 },
                 { y: 8,  type: 'truck', speed: -1.0, len: 2 },
@@ -259,12 +267,13 @@
                 const num = cfg.type.includes('log') ? 3 : (cfg.type.includes('car') ? 3 : 4);
                 for (let i = 0; i < num; i++) {
                     state.objects.push({
-                        x: i * (COLS / num) + Math.random() * 2,
+                        // ★ カメなどが絶対に重ならないようにランダム配置を排除し完全等間隔に修正
+                        x: i * (COLS / num),
                         y: cfg.y,
                         type: cfg.type,
                         speed: cfg.speed * (1 + (state.level - 1) * 0.1),
                         len: cfg.len,
-                        timer: Math.random() * 100,
+                        timer: i * 80, // ダイブのタイミングも規則正しくずらす
                         diveRate: cfg.diveRate || 0,
                         diving: false
                     });
@@ -310,6 +319,8 @@
             state.tick++;
             state.timer -= 0.0003; 
             if (state.timer <= 0) kill();
+
+            if (state.frog.jumpTimer > 0) state.frog.jumpTimer--;
 
             state.objects.forEach(obj => {
                 obj.x += obj.speed * 0.02;
@@ -367,8 +378,7 @@
         // ★ 描画ロジック ★
         // ==========================================
         function drawPattern(ctx, color1, color2, y, height) {
-            ctx.fillStyle = color1;
-            ctx.fillRect(0, y, canvas.width, height);
+            ctx.fillStyle = color1; ctx.fillRect(0, y, canvas.width, height);
             ctx.fillStyle = color2;
             for(let i=0; i<COLS*2; i++) {
                 for(let j=0; j<height/8; j++) {
@@ -388,7 +398,7 @@
             for (let i = 0; i < 5; i++) {
                 ctx.fillStyle = '#000055';
                 ctx.fillRect((i * 3 + 1) * GRID_SIZE, GRID_SIZE, GRID_SIZE, GRID_SIZE);
-                if (state.goals[i]) drawSprite(ctx, sprites.frog_up, (i * 3 + 1) * GRID_SIZE, GRID_SIZE);
+                if (state.goals[i]) drawSprite(ctx, sprites.frog_idle, (i * 3 + 1) * GRID_SIZE, GRID_SIZE);
             }
 
             state.objects.forEach(obj => {
@@ -396,32 +406,32 @@
                 const py = obj.y * GRID_SIZE;
                 
                 if (obj.type === 'log') {
-                    ctx.fillStyle = '#AA5500'; ctx.fillRect(px, py + 2, obj.len * GRID_SIZE, 12);
-                    ctx.fillStyle = '#FFAA55'; ctx.fillRect(px, py + 2, 2, 12); 
-                    ctx.fillRect(px + obj.len * GRID_SIZE - 2, py + 2, 2, 12);
+                    drawSprite(ctx, sprites.log_end_l, px, py);
+                    for (let i = 1; i < obj.len - 1; i++) { drawSprite(ctx, sprites.log, px + i * GRID_SIZE, py); }
+                    drawSprite(ctx, sprites.log_end_r, px + (obj.len - 1) * GRID_SIZE, py);
                 } else if (obj.type === 'turtle') {
-                    for (let i = 0; i < obj.len; i++) {
-                        drawSprite(ctx, obj.diving ? sprites.turtle_dive : sprites.turtle, px + i * GRID_SIZE, py);
-                    }
+                    for (let i = 0; i < obj.len; i++) { drawSprite(ctx, obj.diving ? sprites.turtle_dive : sprites.turtle, px + i * GRID_SIZE, py); }
+                } else if (obj.type === 'truck') {
+                    drawSprite(ctx, sprites.truck_front, px, py);
+                    drawSprite(ctx, sprites.truck_back, px + GRID_SIZE, py);
                 } else if (sprites[obj.type]) {
                     drawSprite(ctx, sprites[obj.type], px, py);
-                    if (obj.len > 1) { 
-                        ctx.fillStyle = '#FFF'; ctx.fillRect(px + GRID_SIZE, py + 2, (obj.len - 1) * GRID_SIZE, 12);
-                    }
                 }
             });
 
             if (state.status !== 'dying') {
-                drawSprite(ctx, sprites.frog_up, state.frog.pixelX, state.frog.y * GRID_SIZE);
+                const currentFrogSprite = state.frog.jumpTimer > 0 ? sprites.frog_jump : sprites.frog_idle;
+                drawSpriteRotated(ctx, currentFrogSprite, state.frog.pixelX, state.frog.y * GRID_SIZE, state.frog.rotation);
             }
 
-            ctx.fillStyle = '#FFF'; ctx.font = 'bold 12px Courier'; ctx.textAlign = 'left';
-            ctx.fillText(`1-UP`, 20, 12);
-            ctx.fillStyle = '#F00'; ctx.fillText(state.score.toString().padStart(5, '0'), 15, 24);
+            // ★ スコアがゴールの背景草むら(Y=16〜)と被らないように、少し小さめのフォントで上に寄せて配置
+            ctx.fillStyle = '#FFF'; ctx.font = 'bold 10px Courier'; ctx.textAlign = 'left';
+            ctx.fillText(`1-UP`, 20, 7);
+            ctx.fillStyle = '#F00'; ctx.fillText(state.score.toString().padStart(5, '0'), 15, 15);
             
             ctx.fillStyle = '#FFF'; ctx.textAlign = 'center';
-            ctx.fillText(`HI-SCORE`, canvas.width / 2, 12);
-            ctx.fillStyle = '#F00'; ctx.fillText(state.highscore.toString().padStart(5, '0'), canvas.width / 2, 24);
+            ctx.fillText(`HI-SCORE`, canvas.width / 2, 7);
+            ctx.fillStyle = '#F00'; ctx.fillText(state.highscore.toString().padStart(5, '0'), canvas.width / 2, 15);
 
             ctx.fillStyle = '#FF0';
             ctx.fillRect(canvas.width - 100, canvas.height - 10, 90 * state.timer, 8);
@@ -429,7 +439,7 @@
             ctx.fillText("TIME", canvas.width - 105, canvas.height - 2);
 
             for (let i = 0; i < state.lives - 1; i++) {
-                drawSprite(ctx, sprites.frog_up, i * 10, canvas.height - 12, 1);
+                drawSprite(ctx, sprites.frog_idle, i * 10, canvas.height - 12, 1);
             }
 
             if (state.status === 'title') {
@@ -445,9 +455,14 @@
         // ★ 入力処理 (スワイプ連続入力対応) ★
         // ==========================================
         let touchStartX = 0, touchStartY = 0;
-        const DEADZONE = 25; // ここを調整すると連続入力の感度が変わります（小さいほど敏感）
+        const DEADZONE = 25; 
+        
+        // ★ 連続入力が速すぎないようにするためのクールダウン時間（ミリ秒）
+        let lastMoveTime = 0;
+        const MOVE_INTERVAL = 180; 
 
         window.addEventListener('touchstart', e => {
+            e.preventDefault(); // ★ここでスマホ特有の長押しメニュー発動を完全に遮断
             initAudio();
             if (state.status === 'title') {
                 spawnObjects();
@@ -464,7 +479,7 @@
         }, { passive: false });
 
         window.addEventListener('touchmove', e => {
-            e.preventDefault(); // スクロール防止
+            e.preventDefault(); 
             if (state.status !== 'playing') return;
 
             const touchX = e.touches[0].screenX;
@@ -472,23 +487,23 @@
             const dx = touchX - touchStartX;
             const dy = touchY - touchStartY;
             
-            // 一定距離(DEADZONE)以上指が動いたら移動コマンドを実行
             if (Math.abs(dx) > DEADZONE || Math.abs(dy) > DEADZONE) {
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    moveFrog(dx > 0 ? 1 : -1, 0);
-                } else {
-                    moveFrog(0, dy > 0 ? 1 : -1);
+                const now = Date.now();
+                // ★ 前回の移動から一定時間（ウェイト）経過している場合のみ移動を許可
+                if (now - lastMoveTime >= MOVE_INTERVAL) {
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        moveFrog(dx > 0 ? 1 : -1, 0);
+                    } else {
+                        moveFrog(0, dy > 0 ? 1 : -1);
+                    }
+                    lastMoveTime = now;
+                    // 移動が成功した時だけ、新しい基準点をセット
+                    touchStartX = touchX;
+                    touchStartY = touchY;
                 }
-                
-                // ★連続入力のための魔法★
-                // 移動したら、指の現在の位置を新しい基準点にする
-                // これにより、指を離さずに動かし続けると連続でジャンプします
-                touchStartX = touchX;
-                touchStartY = touchY;
             }
         }, { passive: false });
 
-        // キーボード対応 (PC確認用)
         window.addEventListener('keydown', e => {
             initAudio();
             if (state.status === 'title') { window.dispatchEvent(new Event('touchstart')); return; }
@@ -500,9 +515,22 @@
 
         function moveFrog(dx, dy) {
             if (state.status !== 'playing') return;
-            state.frog.x = Math.max(0, Math.min(COLS - 1, state.frog.x + dx));
-            state.frog.y = Math.max(1, Math.min(ROWS - 1, state.frog.y + dy));
+            
+            const nextX = state.frog.x + dx;
+            const nextY = state.frog.y + dy;
+            
+            if (nextX >= 0 && nextX < COLS) state.frog.x = nextX;
+            if (nextY >= 1 && nextY <= 13) state.frog.y = nextY;
+
             state.frog.pixelX = state.frog.x * GRID_SIZE;
+            
+            if (dy < 0) state.frog.rotation = 0;      
+            else if (dy > 0) state.frog.rotation = 180; 
+            else if (dx < 0) state.frog.rotation = 270; 
+            else if (dx > 0) state.frog.rotation = 90;  
+            
+            state.frog.jumpTimer = 8; 
+
             playSfx('jump');
             if (dy < 0) state.score += 10;
         }
@@ -526,5 +554,4 @@
     </script>
 </body>
 </html>
-
 
