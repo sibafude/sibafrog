@@ -3,390 +3,302 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Frogger Arcade Fullscreen</title>
+    <title>Frogger Arcade Fullscreen Replica</title>
     <style>
         body {
-            margin: 0;
-            padding: 0;
-            background-color: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            
-            /* スマホ特有の動作（長押し拡大、テキスト選択）を無効化 */
-            touch-action: none;
-            -webkit-user-select: none;
-            user-select: none;
-            -webkit-touch-callout: none;
-            
+            margin: 0; padding: 0; background-color: #000;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; width: 100vw; overflow: hidden;
+            touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
             font-family: 'Courier New', Courier, monospace;
         }
         #gameCanvas {
             background-color: #000;
-            width: 100%;
-            height: 100%;
-            object-fit: contain; 
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
-            /* キャンバス自体も選択不可に */
-            -webkit-user-select: none;
-            user-select: none;
+            width: 100%; height: 100%; object-fit: contain; 
+            image-rendering: pixelated; image-rendering: crisp-edges;
+            -webkit-user-select: none; user-select: none;
         }
     </style>
 </head>
 <body>
-
     <canvas id="gameCanvas" width="224" height="256"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // アーケード解像度: 224x256
         const GRID_SIZE = 16;
         const COLS = 14;
-        const ROWS = 16;
 
         // ==========================================
-        // ★ ドット絵スプライトデータ (8x8を2倍表示) ★
+        // ★ ドット絵データ ★
         // ==========================================
-        // 0:透明, 1:緑(カエル), 2:黄緑(カエル背中), 3:赤(車/カメ/草), 4:緑(カメ甲羅/草), 5:茶(丸太), 6:濃茶(丸太線), 7:黄(車), 8:紫(車), 9:白(車), A:青(水), B:水色(潜水カメ), C:黒(車窓など), D:オレンジ
         const P = { 
             0: null, 1: '#00D800', 2: '#FFFF00', 3: '#FF0000', 4: '#00AA00', 
             5: '#AA5500', 6: '#552200', 7: '#FFFF00', 8: '#AA00FF', 9: '#FFFFFF', 
-            10: '#000088', 11: '#00FFFF', 12: '#000000', 13: '#FFAA00' 
+            10: '#000088', 11: '#00FFFF', 12: '#000000', 13: '#FFAA00', 14: '#FF00FF'
         };
 
         const sprites = {
+            // ★ カエルのサイズを一回り小さく修正
             frog_idle: [
+                [0,0,0,0,0,0,0,0],
+                [0,0,1,0,0,1,0,0],
+                [0,1,1,1,1,1,1,0],
+                [0,0,2,2,2,2,0,0],
+                [0,0,1,1,1,1,0,0],
                 [0,1,1,0,0,1,1,0],
-                [1,1,1,1,1,1,1,1],
-                [0,1,1,1,1,1,1,0],
-                [0,0,2,2,2,2,0,0],
-                [0,0,2,2,2,2,0,0],
-                [0,1,1,1,1,1,1,0],
-                [1,1,0,0,0,0,1,1],
-                [1,0,0,0,0,0,0,1]
+                [0,1,0,0,0,0,1,0],
+                [0,0,0,0,0,0,0,0]
             ],
             frog_jump: [
+                [0,0,0,0,0,0,0,0],
                 [0,0,1,1,1,1,0,0],
                 [0,1,1,1,1,1,1,0],
-                [1,1,1,1,1,1,1,1],
-                [0,1,2,2,2,2,1,0],
-                [0,1,2,2,2,2,1,0],
-                [1,1,1,1,1,1,1,1],
-                [0,1,1,0,0,1,1,0],
-                [0,1,0,0,0,0,1,0]
-            ],
-            turtle: [ // カメ（1. 出ている状態）
-                [0,0,3,3,0,0,0,0],
-                [0,3,4,4,4,4,0,0],
-                [3,4,4,1,1,4,4,3],
-                [0,4,1,4,4,1,4,0],
-                [0,4,1,4,4,1,4,0],
-                [3,4,4,1,1,4,4,3],
-                [0,3,4,4,4,4,0,0],
-                [0,0,3,3,0,0,0,0]
-            ],
-            turtle_dive_1: [ // カメ（2. 潜りかけ・緑が真ん中に残る）
-                [0,0,0,0,0,0,0,0],
-                [0,0,10,10,10,10,0,0],
-                [0,10,4,4,4,4,10,0],
-                [0,10,4,1,1,4,10,0],
-                [0,10,4,1,1,4,10,0],
-                [0,10,4,4,4,4,10,0],
-                [0,0,10,10,10,10,0,0],
-                [0,0,0,0,0,0,0,0]
-            ],
-            turtle_dive_2: [ // カメ（3. 現在の潜りかけ・水色）
-                [0,0,0,0,0,0,0,0],
-                [0,0,11,11,11,11,0,0],
-                [0,11,10,10,10,10,11,0],
-                [0,11,10,11,11,10,11,0],
-                [0,11,10,11,11,10,11,0],
-                [0,11,10,10,10,10,11,0],
-                [0,0,11,11,11,11,0,0],
-                [0,0,0,0,0,0,0,0]
-            ],
-            turtle_dive_3: [ // カメ（4. 完全に潜った状態・描画しない用）
-                [0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0],
+                [0,0,2,2,2,2,0,0],
+                [0,1,1,1,1,1,1,0],
+                [0,1,0,0,0,0,1,0],
                 [0,0,0,0,0,0,0,0],
                 [0,0,0,0,0,0,0,0]
             ],
-            car_yellow: [
-                [0,0,0,0,0,0,0,0],
-                [0,12,12,0,0,12,12,0],
-                [7,7,7,7,7,7,7,7],
-                [7,7,12,8,8,12,7,7],
-                [7,7,12,8,8,12,7,7],
-                [7,7,7,7,7,7,7,7],
-                [0,12,12,0,0,12,12,0],
-                [0,0,0,0,0,0,0,0]
+            skull: [ 
+                [0,0,0,0,0,0,0,0],[0,9,9,9,9,9,9,0],[9,9,9,9,9,9,9,9],[9,12,12,9,9,12,12,9],
+                [9,12,12,9,9,12,12,9],[0,9,9,12,12,9,9,0],[0,0,9,0,0,9,0,0],[0,0,9,9,9,9,0,0]
             ],
-            car_white: [
-                [0,0,0,0,0,0,0,0],
-                [0,9,9,9,9,9,9,0],
-                [13,9,9,12,12,9,9,9],
-                [13,9,9,12,12,9,9,9],
-                [13,9,9,12,12,9,9,9],
-                [13,9,9,12,12,9,9,9],
-                [0,9,9,9,9,9,9,0],
-                [0,0,0,0,0,0,0,0]
+            fly: [ 
+                [0,0,0,0,0,0,0,0],[0,0,14,0,0,14,0,0],[0,14,14,3,3,14,14,0],[0,0,3,3,3,3,0,0],
+                [0,0,3,9,9,3,0,0],[0,0,0,3,3,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]
             ],
-            car_purple: [
-                [0,0,0,0,0,0,0,0],
-                [0,12,12,0,0,12,12,0],
-                [8,8,8,8,8,8,8,8],
-                [8,8,9,9,9,9,8,8],
-                [8,8,9,9,9,9,8,8],
-                [8,8,8,8,8,8,8,8],
-                [0,12,12,0,0,12,12,0],
-                [0,0,0,0,0,0,0,0]
+            turtle: [ 
+                [0,0,3,3,0,0,0,0],[0,3,4,4,4,4,0,0],[3,4,4,1,1,4,4,3],[0,4,1,4,4,1,4,0],
+                [0,4,1,4,4,1,4,0],[3,4,4,1,1,4,4,3],[0,3,4,4,4,4,0,0],[0,0,3,3,0,0,0,0]
             ],
-            truck_front: [
-                [0,0,0,0,0,0,0,0],
-                [13,9,9,9,9,9,9,9],
-                [13,9,12,12,12,9,9,9],
-                [13,9,12,12,12,9,9,9],
-                [13,9,12,12,12,9,9,9],
-                [13,9,12,12,12,9,9,9],
-                [13,9,9,9,9,9,9,9],
-                [0,0,0,0,0,0,0,0]
+            turtle_dive_1: [ 
+                [0,0,0,0,0,0,0,0],[0,0,10,10,10,10,0,0],[0,10,4,4,4,4,10,0],[0,10,4,1,1,4,10,0],
+                [0,10,4,1,1,4,10,0],[0,10,4,4,4,4,10,0],[0,0,10,10,10,10,0,0],[0,0,0,0,0,0,0,0]
+            ],
+            turtle_dive_2: [ 
+                [0,0,0,0,0,0,0,0],[0,0,11,11,11,11,0,0],[0,11,10,10,10,10,11,0],[0,11,10,11,11,10,11,0],
+                [0,11,10,11,11,10,11,0],[0,11,10,10,10,10,11,0],[0,0,11,11,11,11,0,0],[0,0,0,0,0,0,0,0]
+            ],
+            turtle_dive_3: [ 
+                [0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]
+            ],
+            car_yellow: [ 
+                [0,0,0,0,0,0,0,0],[0,12,12,0,0,12,12,0],[7,7,7,7,7,7,7,7],[7,7,12,8,8,12,7,7],
+                [7,7,12,8,8,12,7,7],[7,7,7,7,7,7,7,7],[0,12,12,0,0,12,12,0],[0,0,0,0,0,0,0,0]
+            ],
+            car_white: [ 
+                [0,0,0,0,0,0,0,0],[0,9,9,9,9,9,9,0],[13,9,9,12,12,9,9,9],[13,9,9,12,12,9,9,9],
+                [13,9,9,12,12,9,9,9],[13,9,9,12,12,9,9,9],[0,9,9,9,9,9,9,0],[0,0,0,0,0,0,0,0]
+            ],
+            car_purple: [ 
+                [0,0,0,0,0,0,0,0],[0,12,12,0,0,12,12,0],[8,8,8,8,8,8,8,8],[8,8,9,9,9,9,8,8],
+                [8,8,9,9,9,9,8,8],[8,8,8,8,8,8,8,8],[0,12,12,0,0,12,12,0],[0,0,0,0,0,0,0,0]
+            ],
+            car_race: [ 
+                [0,0,0,0,0,0,0,0],[0,12,12,0,0,12,12,0],[9,9,9,9,9,9,9,9],[9,9,1,1,1,1,9,9],
+                [9,9,1,1,1,1,9,9],[9,9,9,9,9,9,9,9],[0,12,12,0,0,12,12,0],[0,0,0,0,0,0,0,0]
+            ],
+            truck_front: [ 
+                [0,0,0,0,0,0,0,0],[13,9,9,9,9,9,9,9],[13,9,12,12,12,9,9,9],[13,9,12,12,12,9,9,9],
+                [13,9,12,12,12,9,9,9],[13,9,12,12,12,9,9,9],[13,9,9,9,9,9,9,9],[0,0,0,0,0,0,0,0]
             ],
             truck_back: [
-                [0,0,0,0,0,0,0,0],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],
-                [0,0,0,0,0,0,0,0]
+                [0,0,0,0,0,0,0,0],[9,9,9,9,9,9,9,9],[9,9,9,9,9,9,9,9],[9,9,9,9,9,9,9,9],
+                [9,9,9,9,9,9,9,9],[9,9,9,9,9,9,9,9],[9,9,9,9,9,9,9,9],[0,0,0,0,0,0,0,0]
             ],
             log: [
-                [0,0,0,0,0,0,0,0],
-                [5,5,5,5,5,5,5,5],
-                [6,5,5,5,6,5,5,5],
-                [5,5,6,5,5,5,6,5],
-                [5,5,5,5,6,5,5,5],
-                [6,5,5,5,5,5,5,5],
-                [5,5,5,5,5,5,5,5],
-                [0,0,0,0,0,0,0,0]
+                [0,0,0,0,0,0,0,0],[5,5,5,5,5,5,5,5],[6,5,5,5,6,5,5,5],[5,5,6,5,5,5,6,5],
+                [5,5,5,5,6,5,5,5],[6,5,5,5,5,5,5,5],[5,5,5,5,5,5,5,5],[0,0,0,0,0,0,0,0]
             ],
             log_end_l: [
-                [0,0,0,0,0,0,0,0],
-                [0,13,5,5,5,5,5,5],
-                [13,13,5,5,5,6,5,5],
-                [13,13,6,5,5,5,6,5],
-                [13,13,5,5,6,5,5,5],
-                [0,13,5,5,5,5,5,5],
-                [0,0,5,5,5,5,5,5],
-                [0,0,0,0,0,0,0,0]
+                [0,0,0,0,0,0,0,0],[0,13,5,5,5,5,5,5],[13,13,5,5,5,6,5,5],[13,13,6,5,5,5,6,5],
+                [13,13,5,5,6,5,5,5],[0,13,5,5,5,5,5,5],[0,0,5,5,5,5,5,5],[0,0,0,0,0,0,0,0]
             ],
             log_end_r: [
-                [0,0,0,0,0,0,0,0],
-                [5,5,5,5,5,5,13,0],
-                [5,5,5,5,6,5,13,13],
-                [6,5,5,5,5,6,13,13],
-                [5,5,6,5,5,5,13,13],
-                [5,5,5,5,5,5,13,0],
-                [5,5,5,5,5,5,0,0],
-                [0,0,0,0,0,0,0,0]
+                [0,0,0,0,0,0,0,0],[5,5,5,5,5,5,13,0],[5,5,5,5,6,5,13,13],[6,5,5,5,5,6,13,13],
+                [5,5,6,5,5,5,13,13],[5,5,5,5,5,5,13,0],[5,5,5,5,5,5,0,0],[0,0,0,0,0,0,0,0]
             ]
         };
 
-        function drawSpriteRotated(ctx, sprite, x, y, rotation = 0, scale = 2) {
-            ctx.save();
-            ctx.translate(x + 8, y + 8); 
-            ctx.rotate(rotation * Math.PI / 180);
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const colorId = sprite[r][c];
-                    if (colorId !== 0) {
-                        ctx.fillStyle = P[colorId];
-                        ctx.fillRect((c - 4) * scale, (r - 4) * scale, scale, scale);
+        const spriteCanvases = {};
+        const bgCanvas = document.createElement('canvas');
+
+        function initRenderCaches() {
+            for (const key in sprites) {
+                const spCanvas = document.createElement('canvas');
+                spCanvas.width = GRID_SIZE; spCanvas.height = GRID_SIZE;
+                const spCtx = spCanvas.getContext('2d');
+                const sprite = sprites[key];
+                for (let r = 0; r < 8; r++) {
+                    for (let c = 0; c < 8; c++) {
+                        const colorId = sprite[r][c];
+                        if (colorId !== 0) { spCtx.fillStyle = P[colorId]; spCtx.fillRect(c * 2, r * 2, 2, 2); }
                     }
                 }
+                spriteCanvases[key] = spCanvas;
             }
-            ctx.restore();
+
+            bgCanvas.width = canvas.width; bgCanvas.height = canvas.height;
+            const bCtx = bgCanvas.getContext('2d');
+            bCtx.fillStyle = '#000'; bCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bCtx.fillStyle = '#000055'; bCtx.fillRect(0, GRID_SIZE * 1, bgCanvas.width, GRID_SIZE * 6);
+            drawPatternTo(bCtx, '#8800AA', '#FF0000', GRID_SIZE * 7, GRID_SIZE);
+            drawPatternTo(bCtx, '#8800AA', '#FF0000', GRID_SIZE * 13, GRID_SIZE);
+            drawPatternTo(bCtx, '#00AA00', '#FF0000', GRID_SIZE * 1, GRID_SIZE);
+            for (let i = 0; i < 5; i++) {
+                bCtx.fillStyle = '#000055';
+                bCtx.fillRect((i * 3 + 1) * GRID_SIZE, GRID_SIZE, GRID_SIZE, GRID_SIZE);
+            }
         }
 
-        function drawSprite(ctx, sprite, x, y, scale = 2) {
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const colorId = sprite[r][c];
-                    if (colorId !== 0) {
-                        ctx.fillStyle = P[colorId];
-                        ctx.fillRect(x + c * scale, y + r * scale, scale, scale);
-                    }
+        function drawPatternTo(context, color1, color2, y, height) {
+            context.fillStyle = color1; context.fillRect(0, y, bgCanvas.width, height);
+            context.fillStyle = color2;
+            for(let i = 0; i < COLS * 2; i++) {
+                for(let j = 0; j < height / 8; j++) {
+                    if ((i + j) % 2 === 0) context.fillRect(i * 8, y + j * 8, 4, 4);
                 }
             }
+        }
+
+        function drawCachedSprite(ctx, key, x, y) {
+            if(spriteCanvases[key]) ctx.drawImage(spriteCanvases[key], x, y);
+        }
+
+        function drawCachedSpriteRotated(ctx, key, x, y, rotation) {
+            if(!spriteCanvases[key]) return;
+            ctx.save(); ctx.translate(x + 8, y + 8); ctx.rotate(rotation * Math.PI / 180);
+            ctx.drawImage(spriteCanvases[key], -8, -8); ctx.restore();
         }
 
         // ==========================================
-        // ★ サウンド・システム (BGM & SE) ★
+        // ★ 音声システム ★
         // ==========================================
-        let audioCtx;
-        let bgmInterval = null;
-        let isAudioPlaying = false;
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = new AudioContextClass();
+        let audioInitialized = false;
+        let bgmInterval = null; let isAudioPlaying = false;
 
-        // 非同期にしてユーザー操作時に確実にresume()が完了するように修正
-        async function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                await audioCtx.resume();
-            }
+        function initAudio() {
+            if (audioInitialized) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const buffer = audioCtx.createBuffer(1, 1, 22050);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer; source.connect(audioCtx.destination); source.start(0);
+            audioInitialized = true;
         }
 
         function playSfx(type) {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            const now = audioCtx.currentTime;
+            if (!audioInitialized || !audioCtx) return;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination); const now = audioCtx.currentTime;
 
             if (type === 'jump') {
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(300, now);
-                osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
-                gain.gain.setValueAtTime(0.08, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.type = 'square'; osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+                gain.gain.setValueAtTime(0.08, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
                 osc.start(now); osc.stop(now + 0.1);
             } else if (type === 'die') {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(150, now);
-                osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
-                gain.gain.setValueAtTime(0.15, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+                gain.gain.setValueAtTime(0.15, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
                 osc.start(now); osc.stop(now + 0.5);
             } else if (type === 'goal') {
-                osc.type = 'square';
-                [659.25, 783.99, 1046.50].forEach((f, i) => osc.frequency.setValueAtTime(f, now + i * 0.1));
-                gain.gain.setValueAtTime(0.1, now);
-                gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.type = 'square'; [659.25, 783.99, 1046.50].forEach((f, i) => osc.frequency.setValueAtTime(f, now + i * 0.1));
+                gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.3);
                 osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'bonus') {
+                osc.type = 'square'; [880, 1100, 1320].forEach((f, i) => osc.frequency.setValueAtTime(f, now + i * 0.05));
+                gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
             } else if (type === 'start') {
-                osc.type = 'square';
+                osc.type = 'triangle'; 
                 const melody = [523, 659, 784, 1046, 784, 1046];
                 melody.forEach((f, i) => {
                     osc.frequency.setValueAtTime(f, now + i * 0.15);
-                    gain.gain.setValueAtTime(0.1, now + i * 0.15); 
-                    gain.gain.setValueAtTime(0, now + i * 0.15 + 0.1);
+                    gain.gain.setValueAtTime(0.04, now + i * 0.15); gain.gain.setValueAtTime(0, now + i * 0.15 + 0.1);
                 });
                 osc.start(now); osc.stop(now + melody.length * 0.15);
+            } else if (type === 'time_warning') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(880, now);
+                gain.gain.setValueAtTime(0.03, now); gain.gain.linearRampToValueAtTime(0, now + 0.05);
+                osc.start(now); osc.stop(now + 0.05);
             }
         }
 
-        const bgmNotes = [
-            261, 0, 329, 0, 392, 0, 329, 0,
-            349, 0, 440, 0, 523, 0, 440, 0,
-            392, 0, 329, 0, 261, 0, 329, 0,
-            293, 0, 392, 0, 293, 0, 392, 0
-        ];
+        const bgmNotes = [261,0,329,0,392,0,329,0,349,0,440,0,523,0,440,0,392,0,329,0,261,0,329,0,293,0,392,0,293,0,392,0];
         let bgmStep = 0;
 
         function startBGM() {
-            if (!audioCtx || isAudioPlaying) return;
+            if (!audioInitialized || isAudioPlaying) return;
             isAudioPlaying = true;
             bgmInterval = setInterval(() => {
                 if (state.status !== 'playing') return;
-                const freq = bgmNotes[bgmStep % bgmNotes.length];
-                bgmStep++;
+                const freq = bgmNotes[bgmStep % bgmNotes.length]; bgmStep++;
                 if (freq > 0) {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                    osc.type = 'triangle'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                    gain.gain.setValueAtTime(0.05, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
                     osc.connect(gain); gain.connect(audioCtx.destination);
                     osc.start(); osc.stop(audioCtx.currentTime + 0.15);
                 }
             }, 150);
         }
-
-        function stopBGM() {
-            isAudioPlaying = false;
-            if (bgmInterval) clearInterval(bgmInterval);
-        }
+        function stopBGM() { isAudioPlaying = false; if (bgmInterval) clearInterval(bgmInterval); }
 
         // ==========================================
         // ★ ゲームロジック ★
         // ==========================================
         const state = {
-            frog: { x: 7, y: 14, pixelX: 7 * GRID_SIZE, rotation: 0, jumpTimer: 0 },
-            objects: [], 
-            goals: [false, false, false, false, false],
-            timer: 1.0, score: 0, lives: 3, level: 1, highscore: 10000,
-            status: 'title',
-            bonusDisplay: { timer: 0, text: "" }, // ゴール時のタイム表示用
-            tick: 0
+            frog: { x: 7, y: 13, pixelX: 7 * GRID_SIZE, rotation: 0, jumpTimer: 0, highestY: 13 },
+            lanes: {}, goals: [false, false, false, false, false],
+            fly: { active: false, pos: -1, timer: 0 }, deathPos: { x: 0, y: 0 },
+            timer: 1.0, score: 0, 
+            lives: 5, // ★ カエルの数を5匹（5回プレイ）に変更
+            level: 1, highscore: 1000, 
+            status: 'title', bonusDisplay: { timer: 0, text: "" }, tick: 0
         };
 
         function resetFrog() {
-            state.frog = { x: 7, y: 13, pixelX: 7 * GRID_SIZE, rotation: 0, jumpTimer: 0 };
-            state.timer = 1.0;
-            state.status = 'playing';
-            startBGM();
+            state.frog = { x: 7, y: 13, pixelX: 7 * GRID_SIZE, rotation: 0, jumpTimer: 0, highestY: 13 };
+            state.timer = 1.0; state.status = 'playing'; startBGM();
         }
 
         function spawnObjects() {
-            state.objects = [];
+            state.lanes = {};
             const laneConfigs = [
-                { y: 2, type: 'log', speed: 1.2, len: 3 },
-                // ★上のカメは2匹ずつ
-                { y: 3, type: 'turtle', speed: -1.0, len: 2, diveRate: 0.3 },
-                { y: 4, type: 'log', speed: 2.5, len: 7 }, 
-                { y: 5, type: 'log', speed: 1.5, len: 2 },
-                // ★下のカメは3匹ずつ
-                { y: 6, type: 'turtle', speed: -1.2, len: 3, diveRate: 0.5 },
-                { y: 8,  type: 'truck', speed: -1.0, len: 2 },
-                { y: 9,  type: 'car_purple', speed: 1.5, len: 1 },
-                { y: 10, type: 'car_white', speed: -1.2, len: 1 },
-                { y: 11, type: 'car_white', speed: 1.8, len: 1 },
-                { y: 12, type: 'car_yellow', speed: -1.5, len: 1 }
+                { y: 2, type: 'log', speed: 1.2, len: 3, num: 3, xOffsets: [0, 6, 12] },
+                { y: 3, type: 'turtle', speed: -1.0, len: 2, num: 4, diveRate: 0.3, xOffsets: [0, 4.5, 9, 13.5] },
+                { y: 4, type: 'log', speed: 2.5, len: 7, num: 2, xOffsets: [0, 9] }, 
+                { y: 5, type: 'log', speed: 1.5, len: 2, num: 3, xOffsets: [0, 6, 12] },
+                { y: 6, type: 'turtle', speed: -1.2, len: 3, num: 4, diveRate: 0.5, xOffsets: [0, 5, 9.5, 14] },
+                { y: 8,  type: 'truck', speed: -1.0, len: 2, num: 3, xOffsets: [0, 6, 12] },
+                { y: 9,  type: 'car_race', speed: 2.5, len: 1, num: 3, xOffsets: [0, 6, 12] },
+                { y: 10, type: 'car_purple', speed: -1.2, len: 1, num: 3, xOffsets: [0, 6, 12] },
+                { y: 11, type: 'car_white', speed: 1.8, len: 1, num: 3, xOffsets: [0, 6, 12] },
+                { y: 12, type: 'car_yellow', speed: -1.5, len: 1, num: 3, xOffsets: [0, 6, 12] }
             ];
 
             laneConfigs.forEach(cfg => {
-                const num = cfg.type.includes('log') ? 3 : (cfg.type.includes('car') ? 3 : 4);
-                for (let i = 0; i < num; i++) {
-                    const isEvenSpacing = (cfg.y === 2 || cfg.type === 'turtle');
-                    const randomOffset = isEvenSpacing ? 0 : Math.random() * 2;
-                    
-                    // ★カメが潜るのは各レーンで「1塊」だけ（ここではi=0のグループを対象とする）
+                state.lanes[cfg.y] = []; 
+                for (let i = 0; i < cfg.num; i++) {
+                    let x = cfg.xOffsets ? cfg.xOffsets[i] : 0;
                     let isDivingGroup = false;
-                    if (cfg.type === 'turtle' && i === 0) {
-                        isDivingGroup = true;
-                    }
-                    
-                    state.objects.push({
-                        x: i * (COLS / num) + randomOffset,
-                        y: cfg.y,
-                        type: cfg.type,
-                        speed: cfg.speed * (1 + (state.level - 1) * 0.1),
-                        len: cfg.len,
-                        timer: i * 130, 
-                        diveRate: isDivingGroup ? (cfg.diveRate || 0) : 0, // 潜るグループ以外はdiveRateを0にする
-                        diveState: 1 // 1:出てる 2:潜りかけ(緑) 3:潜りかけ(水色) 4:完全に潜った
+                    if (cfg.type === 'turtle' && i === 0) isDivingGroup = true;
+                    const baseTimer = cfg.y === 3 ? i * 80 + 100 : i * 80;
+
+                    state.lanes[cfg.y].push({
+                        x: x, y: cfg.y, type: cfg.type, speed: cfg.speed * (1 + (state.level - 1) * 0.1),
+                        len: cfg.len, timer: baseTimer, diveRate: isDivingGroup ? (cfg.diveRate || 0) : 0, diveState: 1
                     });
                 }
             });
         }
 
         function kill() {
-            state.status = 'dying';
-            stopBGM();
-            playSfx('die');
+            state.deathPos = { x: state.frog.x, y: state.frog.y }; 
+            state.status = 'dying'; stopBGM(); playSfx('die');
             state.lives--;
             setTimeout(() => {
                 if (state.lives > 0) resetFrog();
@@ -396,27 +308,23 @@
 
         function winGoal(idx) {
             state.goals[idx] = true;
-            const timeBonus = Math.floor(state.timer * 1000);
+            
+            // ★ タイムボーナスの調整 (満タンでも40点程度に抑える)
+            const timeBonus = Math.floor(state.timer * 40); 
             state.score += 50 + timeBonus;
             if (state.score > state.highscore) state.highscore = state.score;
-            
-            // ボーナス表示の設定（約1.5秒表示）
             state.bonusDisplay = { timer: 90, text: `TIME ${timeBonus}` };
             
-            stopBGM();
-            playSfx('goal');
+            stopBGM(); playSfx('goal');
             
             if (state.goals.every(g => g)) {
                 state.status = 'won';
                 setTimeout(() => {
-                    state.level++;
-                    state.goals = [false, false, false, false, false];
-                    spawnObjects();
-                    resetFrog();
+                    state.level++; state.goals = [false, false, false, false, false];
+                    spawnObjects(); resetFrog();
                 }, 2000);
             } else {
-                state.status = 'won';
-                setTimeout(resetFrog, 1000);
+                state.status = 'won'; setTimeout(resetFrog, 1000);
             }
         }
 
@@ -424,62 +332,75 @@
             if (state.status !== 'playing') return;
 
             state.tick++;
-            state.timer -= 0.0003; 
+            // ★ タイムの減少スピードを2倍に早く調整 (0.0003 -> 0.0006)
+            state.timer -= 0.0006; 
             if (state.timer <= 0) kill();
-
-            if (state.frog.jumpTimer > 0) state.frog.jumpTimer--;
             
+            if (state.timer < 0.25 && state.tick % 30 === 0) playSfx('time_warning');
+            if (state.frog.jumpTimer > 0) state.frog.jumpTimer--;
             if (state.bonusDisplay.timer > 0) state.bonusDisplay.timer--;
 
+            if (!state.fly.active && Math.random() < 0.005) {
+                const emptyGoals = state.goals.map((g, i) => g ? -1 : i).filter(i => i !== -1);
+                if (emptyGoals.length > 0) {
+                    state.fly.pos = emptyGoals[Math.floor(Math.random() * emptyGoals.length)];
+                    state.fly.active = true; state.fly.timer = 200; 
+                }
+            }
+            if (state.fly.active) {
+                state.fly.timer--;
+                if (state.fly.timer <= 0) state.fly.active = false;
+            }
+
             if (isTouching && (currentSwipeDir.dx !== 0 || currentSwipeDir.dy !== 0)) {
-                if (autoMoveTimer > 0) {
-                    autoMoveTimer--;
-                } else {
+                if (autoMoveTimer > 0) autoMoveTimer--;
+                else {
                     moveFrog(currentSwipeDir.dx, currentSwipeDir.dy);
                     autoMoveTimer = AUTO_MOVE_INTERVAL;
                 }
             }
 
-            state.objects.forEach(obj => {
-                obj.x += obj.speed * 0.02;
-                if (obj.speed > 0 && obj.x > COLS + 1) obj.x = -obj.len;
-                if (obj.speed < 0 && obj.x < -obj.len - 1) obj.x = COLS + 1;
-                
-                if (obj.type === 'turtle' && obj.diveRate > 0) {
-                    obj.timer += 1;
-                    const cycle = obj.timer % 400; // サイクルを長くして全体的にゆっくりに
-                    if (cycle < 270) obj.diveState = 1;      // 出ている
-                    else if (cycle < 310) obj.diveState = 2; // 潜りかけ(緑)
-                    else if (cycle < 350) obj.diveState = 3; // 潜りかけ(水色)
-                    else obj.diveState = 4;                  // 完全に潜った
-                } else if (obj.type === 'turtle') {
-                    // 潜らないカメは常に出ている状態を維持
-                    obj.diveState = 1;
-                }
-            });
+            for (let y in state.lanes) {
+                state.lanes[y].forEach(obj => {
+                    obj.x += obj.speed * 0.02;
+                    if (obj.speed > 0 && obj.x > 15) obj.x -= 18;
+                    if (obj.speed < 0 && obj.x < -obj.len) obj.x += 18;
+                    
+                    if (obj.type === 'turtle' && obj.diveRate > 0) {
+                        obj.timer += 1;
+                        const cycle = obj.timer % 180; 
+                        if (cycle < 90) obj.diveState = 1;      
+                        else if (cycle < 120) obj.diveState = 2; 
+                        else if (cycle < 150) obj.diveState = 3; 
+                        else obj.diveState = 4;                  
+                    } else if (obj.type === 'turtle') {
+                        obj.diveState = 1;
+                    }
+                });
+            }
 
-            const fx = state.frog.x;
-            const fy = state.frog.y;
+            const fx = state.frog.x; const fy = state.frog.y;
 
-            if (fy >= 8 && fy <= 12) {
-                state.objects.filter(o => o.y === fy).forEach(car => {
+            if (fy >= 8 && fy <= 12 && state.lanes[fy]) {
+                state.lanes[fy].forEach(car => {
                     if (fx > car.x - 0.7 && fx < car.x + car.len - 0.3) kill();
                 });
             }
 
             if (fy >= 2 && fy <= 6) {
                 let riding = null;
-                state.objects.filter(o => o.y === fy).forEach(obj => {
-                    if (fx >= obj.x - 0.5 && fx <= obj.x + obj.len - 0.5) {
-                        if (obj.type === 'turtle' && obj.diveState === 4) return; 
-                        riding = obj;
-                    }
-                });
-
+                if (state.lanes[fy]) {
+                    state.lanes[fy].forEach(obj => {
+                        if (fx >= obj.x - 0.8 && fx <= obj.x + obj.len - 0.2) {
+                            if (obj.type === 'turtle' && obj.diveState === 4) return; 
+                            riding = obj;
+                        }
+                    });
+                }
                 if (riding) {
                     state.frog.pixelX += riding.speed * 0.02 * GRID_SIZE;
                     state.frog.x = Math.round(state.frog.pixelX / GRID_SIZE);
-                    if (state.frog.x < 0 || state.frog.x >= COLS) kill();
+                    if (state.frog.x < -0.5 || state.frog.x >= COLS - 0.5) kill();
                 } else {
                     kill(); 
                 }
@@ -488,9 +409,11 @@
             }
 
             if (fy === 1) {
-                const goalIdx = Math.floor(fx / 3); 
-                const modX = fx % 3;
+                const goalIdx = Math.floor(fx / 3); const modX = fx % 3;
                 if (modX === 1 && goalIdx < 5 && !state.goals[goalIdx]) {
+                    if (state.fly.active && state.fly.pos === goalIdx) {
+                        state.score += 200; state.fly.active = false; playSfx('bonus');
+                    }
                     winGoal(goalIdx);
                 } else {
                     kill(); 
@@ -501,91 +424,73 @@
         // ==========================================
         // ★ 描画ロジック ★
         // ==========================================
-        function drawPattern(ctx, color1, color2, y, height) {
-            ctx.fillStyle = color1;
-            ctx.fillRect(0, y, canvas.width, height);
-            ctx.fillStyle = color2;
-            for(let i=0; i<COLS*2; i++) {
-                for(let j=0; j<height/8; j++) {
-                    if ((i+j)%2===0) ctx.fillRect(i*8, y+j*8, 4, 4);
-                }
-            }
-        }
-
         function draw() {
-            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(bgCanvas, 0, 0);
 
-            ctx.fillStyle = '#000055'; ctx.fillRect(0, GRID_SIZE * 1, canvas.width, GRID_SIZE * 6);
-            
-            drawPattern(ctx, '#8800AA', '#FF0000', GRID_SIZE * 7, GRID_SIZE);
-            drawPattern(ctx, '#8800AA', '#FF0000', GRID_SIZE * 13, GRID_SIZE);
-
-            drawPattern(ctx, '#00AA00', '#FF0000', GRID_SIZE * 1, GRID_SIZE);
             for (let i = 0; i < 5; i++) {
-                ctx.fillStyle = '#000055';
-                ctx.fillRect((i * 3 + 1) * GRID_SIZE, GRID_SIZE, GRID_SIZE, GRID_SIZE);
-                if (state.goals[i]) drawSprite(ctx, sprites.frog_idle, (i * 3 + 1) * GRID_SIZE, GRID_SIZE);
+                if (state.goals[i]) drawCachedSpriteRotated(ctx, 'frog_idle', (i * 3 + 1) * GRID_SIZE, GRID_SIZE, 180);
+            }
+            if (state.fly.active) drawCachedSprite(ctx, 'fly', (state.fly.pos * 3 + 1) * GRID_SIZE, GRID_SIZE);
+
+            for (let y in state.lanes) {
+                state.lanes[y].forEach(obj => {
+                    const px = obj.x * GRID_SIZE; const py = obj.y * GRID_SIZE;
+                    if (obj.type === 'log') {
+                        drawCachedSprite(ctx, 'log_end_l', px, py);
+                        for (let i = 1; i < obj.len - 1; i++) drawCachedSprite(ctx, 'log', px + i * GRID_SIZE, py);
+                        drawCachedSprite(ctx, 'log_end_r', px + (obj.len - 1) * GRID_SIZE, py);
+                    } else if (obj.type === 'turtle') {
+                        let spKey = 'turtle';
+                        if (obj.diveState === 2) spKey = 'turtle_dive_1';
+                        else if (obj.diveState === 3) spKey = 'turtle_dive_2';
+                        else if (obj.diveState === 4) spKey = 'turtle_dive_3';
+                        for (let i = 0; i < obj.len; i++) drawCachedSprite(ctx, spKey, px + i * GRID_SIZE, py);
+                    } else if (obj.type === 'truck') {
+                        drawCachedSprite(ctx, 'truck_front', px, py);
+                        drawCachedSprite(ctx, 'truck_back', px + GRID_SIZE, py);
+                    } else {
+                        drawCachedSprite(ctx, obj.type, px, py);
+                    }
+                });
             }
 
-            state.objects.forEach(obj => {
-                const px = obj.x * GRID_SIZE;
-                const py = obj.y * GRID_SIZE;
-                
-                if (obj.type === 'log') {
-                    drawSprite(ctx, sprites.log_end_l, px, py);
-                    for (let i = 1; i < obj.len - 1; i++) {
-                        drawSprite(ctx, sprites.log, px + i * GRID_SIZE, py);
-                    }
-                    drawSprite(ctx, sprites.log_end_r, px + (obj.len - 1) * GRID_SIZE, py);
-                    
-                } else if (obj.type === 'turtle') {
-                    for (let i = 0; i < obj.len; i++) {
-                        let spriteToDraw = sprites.turtle;
-                        if (obj.diveState === 2) spriteToDraw = sprites.turtle_dive_1;
-                        else if (obj.diveState === 3) spriteToDraw = sprites.turtle_dive_2;
-                        else if (obj.diveState === 4) spriteToDraw = sprites.turtle_dive_3;
-                        drawSprite(ctx, spriteToDraw, px + i * GRID_SIZE, py);
-                    }
-                } else if (obj.type === 'truck') {
-                    drawSprite(ctx, sprites.truck_front, px, py);
-                    drawSprite(ctx, sprites.truck_back, px + GRID_SIZE, py);
-                } else if (sprites[obj.type]) {
-                    drawSprite(ctx, sprites[obj.type], px, py);
-                }
-            });
-
-            if (state.status !== 'dying') {
-                const currentFrogSprite = state.frog.jumpTimer > 0 ? sprites.frog_jump : sprites.frog_idle;
-                drawSpriteRotated(ctx, currentFrogSprite, state.frog.pixelX, state.frog.y * GRID_SIZE, state.frog.rotation);
+            if (state.status === 'playing') {
+                const spKey = state.frog.jumpTimer > 0 ? 'frog_jump' : 'frog_idle';
+                drawCachedSpriteRotated(ctx, spKey, state.frog.pixelX, state.frog.y * GRID_SIZE, state.frog.rotation);
+            } else if (state.status === 'dying') {
+                drawCachedSprite(ctx, 'skull', state.deathPos.x * GRID_SIZE, state.deathPos.y * GRID_SIZE);
             }
 
-            // ゴール時のボーナスタイム表示（中央の紫の帯の上）
             if (state.bonusDisplay.timer > 0) {
-                const boxWidth = 80;
-                ctx.fillStyle = '#000';
+                const boxWidth = 80; ctx.fillStyle = '#000';
                 ctx.fillRect(canvas.width / 2 - boxWidth / 2, GRID_SIZE * 7, boxWidth, GRID_SIZE);
-                ctx.fillStyle = '#F00';
-                ctx.textAlign = 'center';
-                ctx.font = 'bold 12px Courier';
+                ctx.fillStyle = '#F00'; ctx.textAlign = 'center'; ctx.font = 'bold 12px Courier';
                 ctx.fillText(state.bonusDisplay.text, canvas.width / 2, GRID_SIZE * 7 + 12);
             }
 
-            // ★スコアを1行（一番上のライン・Y=12）に横並びにまとめて表示し、背景と被らないように修正
-            ctx.fillStyle = '#FFF'; ctx.font = 'bold 12px Courier'; ctx.textAlign = 'left';
-            ctx.fillText(`1-UP`, 5, 12);
-            ctx.fillStyle = '#F00'; ctx.fillText(state.score.toString().padStart(5, '0'), 45, 12);
+            // ★ スコアと文字を背景に被らないように完全に一番上の黒帯に引き上げ
+            ctx.font = 'bold 10px Courier'; 
             
-            ctx.fillStyle = '#FFF'; ctx.textAlign = 'left';
-            ctx.fillText(`HI-SCORE`, 105, 12);
-            ctx.fillStyle = '#F00'; ctx.fillText(state.highscore.toString().padStart(5, '0'), 175, 12);
+            // 左上スコア (Y座標を上に詰める)
+            ctx.fillStyle = '#FFF'; ctx.textAlign = 'left'; 
+            ctx.fillText(`1-UP`, 20, 8);
+            ctx.fillStyle = '#FF5555'; 
+            ctx.fillText(state.score.toString().padStart(5, '0'), 20, 16);
+            
+            // 中央ハイスコア (Y座標を上に詰める)
+            ctx.fillStyle = '#FFF'; ctx.textAlign = 'center'; 
+            ctx.fillText(`HI-SCORE`, canvas.width / 2 + 5, 8);
+            ctx.fillStyle = '#FF5555'; 
+            ctx.fillText(state.highscore.toString().padStart(5, '0'), canvas.width / 2 + 5, 16);
 
-            ctx.fillStyle = '#FF0';
-            ctx.fillRect(canvas.width - 100, canvas.height - 10, 90 * state.timer, 8);
-            ctx.fillStyle = '#0F0'; ctx.textAlign = 'right';
-            ctx.fillText("TIME", canvas.width - 105, canvas.height - 2);
+            ctx.font = 'bold 12px Courier'; 
+            ctx.fillStyle = state.timer > 0.25 ? '#0F0' : '#FF5555';
+            ctx.fillRect(canvas.width - 95, canvas.height - 12, 85 * state.timer, 10);
+            ctx.fillStyle = '#FF0'; ctx.textAlign = 'right';
+            ctx.fillText("TIME", canvas.width - 100, canvas.height - 3);
 
             for (let i = 0; i < state.lives - 1; i++) {
-                drawSprite(ctx, sprites.frog_idle, i * 10, canvas.height - 12, 1);
+                if (spriteCanvases['frog_idle']) ctx.drawImage(spriteCanvases['frog_idle'], i * 10 + 5, canvas.height - 12, 8, 8);
             }
 
             if (state.status === 'title') {
@@ -598,119 +503,75 @@
         }
 
         // ==========================================
-        // ★ 入力処理 (スワイプ押しっぱなし・オートリピート対応) ★
+        // ★ 入力処理 ★
         // ==========================================
-        let touchStartX = 0, touchStartY = 0;
-        let isTouching = false;
-        let currentSwipeDir = { dx: 0, dy: 0 };
-        let autoMoveTimer = 0;
-        const AUTO_MOVE_INTERVAL = 12; // 連続で進む間隔（約200ms）
-        const DEADZONE = 25; 
+        let touchStartX = 0, touchStartY = 0; let isTouching = false; let currentSwipeDir = { dx: 0, dy: 0 };
+        let autoMoveTimer = 0; const AUTO_MOVE_INTERVAL = 12; const DEADZONE = 25; 
 
-        window.addEventListener('touchstart', async e => {
-            await initAudio(); // ★音が確実に初期化されるまで待機する
+        function handleStartInput() {
+            initAudio();
             if (state.status === 'title') {
-                spawnObjects();
-                state.score = 0;
-                state.lives = 3;
-                state.level = 1;
-                state.goals = [false, false, false, false, false];
-                playSfx('start');
-                setTimeout(resetFrog, 1000);
-                return;
+                state.status = 'starting'; spawnObjects();
+                // ★ スタート時に残機を5にセット
+                state.score = 0; state.lives = 5; state.level = 1; state.goals = [false, false, false, false, false];
+                playSfx('start'); setTimeout(resetFrog, 1000);
             }
-            touchStartX = e.touches[0].screenX;
-            touchStartY = e.touches[0].screenY;
-            isTouching = true;
-            currentSwipeDir = { dx: 0, dy: 0 };
-            autoMoveTimer = 0;
+        }
+
+        window.addEventListener('touchstart', e => {
+            handleStartInput();
+            if (state.status !== 'playing') return;
+            touchStartX = e.touches[0].screenX; touchStartY = e.touches[0].screenY;
+            isTouching = true; currentSwipeDir = { dx: 0, dy: 0 }; autoMoveTimer = 0;
         }, { passive: false });
 
         window.addEventListener('touchmove', e => {
             e.preventDefault(); 
             if (state.status !== 'playing' || !isTouching) return;
-
-            const touchX = e.touches[0].screenX;
-            const touchY = e.touches[0].screenY;
-            const dx = touchX - touchStartX;
-            const dy = touchY - touchStartY;
-            
+            const dx = e.touches[0].screenX - touchStartX; const dy = e.touches[0].screenY - touchStartY;
             if (Math.abs(dx) > DEADZONE || Math.abs(dy) > DEADZONE) {
                 let newDx = 0, newDy = 0;
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    newDx = dx > 0 ? 1 : -1;
-                } else {
-                    newDy = dy > 0 ? 1 : -1;
-                }
-                
+                if (Math.abs(dx) > Math.abs(dy)) newDx = dx > 0 ? 1 : -1; else newDy = dy > 0 ? 1 : -1;
                 if (currentSwipeDir.dx !== newDx || currentSwipeDir.dy !== newDy) {
-                    currentSwipeDir = { dx: newDx, dy: newDy };
-                    moveFrog(currentSwipeDir.dx, currentSwipeDir.dy);
-                    autoMoveTimer = AUTO_MOVE_INTERVAL;
-                    
-                    touchStartX = touchX;
-                    touchStartY = touchY;
+                    currentSwipeDir = { dx: newDx, dy: newDy }; moveFrog(currentSwipeDir.dx, currentSwipeDir.dy);
+                    autoMoveTimer = AUTO_MOVE_INTERVAL; touchStartX = e.touches[0].screenX; touchStartY = e.touches[0].screenY;
                 }
             }
         }, { passive: false });
 
-        window.addEventListener('touchend', () => {
-            isTouching = false;
-            currentSwipeDir = { dx: 0, dy: 0 };
-        });
-        
-        window.addEventListener('touchcancel', () => {
-            isTouching = false;
-            currentSwipeDir = { dx: 0, dy: 0 };
-        });
-
-        window.addEventListener('keydown', async e => {
-            await initAudio(); // ★キーボード操作時も確実に初期化
-            if (state.status === 'title') { window.dispatchEvent(new Event('touchstart')); return; }
-            if (e.key === 'ArrowUp') moveFrog(0, -1);
-            else if (e.key === 'ArrowDown') moveFrog(0, 1);
-            else if (e.key === 'ArrowLeft') moveFrog(-1, 0);
-            else if (e.key === 'ArrowRight') moveFrog(1, 0);
+        window.addEventListener('touchend', () => { isTouching = false; currentSwipeDir = { dx: 0, dy: 0 }; });
+        window.addEventListener('keydown', e => {
+            handleStartInput();
+            if (state.status !== 'playing') return;
+            if (e.key === 'ArrowUp') moveFrog(0, -1); else if (e.key === 'ArrowDown') moveFrog(0, 1);
+            else if (e.key === 'ArrowLeft') moveFrog(-1, 0); else if (e.key === 'ArrowRight') moveFrog(1, 0);
         });
 
         function moveFrog(dx, dy) {
             if (state.status !== 'playing') return;
-            
-            const nextX = state.frog.x + dx;
-            const nextY = state.frog.y + dy;
-            
+            const nextX = state.frog.x + dx; const nextY = state.frog.y + dy;
             if (nextX >= 0 && nextX < COLS) state.frog.x = nextX;
             if (nextY >= 1 && nextY <= 13) state.frog.y = nextY;
-
             state.frog.pixelX = state.frog.x * GRID_SIZE;
             
-            if (dy < 0) state.frog.rotation = 0;      
-            else if (dy > 0) state.frog.rotation = 180; 
-            else if (dx < 0) state.frog.rotation = 270; 
-            else if (dx > 0) state.frog.rotation = 90;  
-            
-            state.frog.jumpTimer = 8; 
+            if (dy < 0) state.frog.rotation = 0; else if (dy > 0) state.frog.rotation = 180; 
+            else if (dx < 0) state.frog.rotation = 270; else if (dx > 0) state.frog.rotation = 90;  
+            state.frog.jumpTimer = 8; playSfx('jump');
 
-            playSfx('jump');
-            if (dy < 0) state.score += 10;
+            if (state.frog.y < state.frog.highestY) {
+                state.frog.highestY = state.frog.y;
+                state.score += 10;
+                if (state.score > state.highscore) state.highscore = state.score;
+            }
         }
 
-        // ==========================================
-        // ★ メインループ ★
-        // ==========================================
         let lastTime = 0;
         function loop(timestamp) {
-            if (timestamp - lastTime >= 16) { 
-                update();
-                draw();
-                lastTime = timestamp;
-            }
+            if (timestamp - lastTime >= 16) { update(); draw(); lastTime = timestamp; }
             requestAnimationFrame(loop);
         }
         
-        spawnObjects();
-        draw(); 
-        requestAnimationFrame(loop);
+        initRenderCaches(); spawnObjects(); draw(); requestAnimationFrame(loop);
     </script>
 </body>
 </html>
