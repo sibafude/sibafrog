@@ -31,102 +31,363 @@
         const COLS = 14;
 
         // ==========================================
-        // ★ ドット絵データ ★
+        // ★ ドット絵データ (16x16 高精細版) ★
         // ==========================================
         const P = { 
-            0: null, 1: '#00D800', 2: '#FFFF00', 3: '#FF0000', 4: '#00AA00', 
-            5: '#AA5500', 6: '#552200', 7: '#FFFF00', 8: '#AA00FF', 9: '#FFFFFF', 
-            10: '#000088', 11: '#00FFFF', 12: '#000000', 13: '#FFAA00', 14: '#FF00FF'
+            '.': null, // 透明
+            'K': '#000000', 'W': '#FFFFFF', // 黒、白
+            'R': '#FF0000', 'r': '#AA0000', // 赤、暗い赤
+            'G': '#00FF00', 'g': '#008800', // 緑、暗い緑
+            'Y': '#FFFF00', 'y': '#AAAA00', // 黄色、暗い黄色
+            'B': '#0055FF', 'b': '#000088', // 青、暗い青
+            'C': '#00FFFF', 'c': '#008888', // シアン（窓ガラス）
+            'T': '#A0522D', 't': '#D2B48C', // 茶色（丸太、カメ）、明るい茶色
+            'O': '#FFA500', 'P': '#800080', // オレンジ（甲羅）、紫
+            'D': '#444444', 'L': '#AAAAAA'  // ダークグレー（タイヤ）、ライトグレー
         };
 
         const sprites = {
             frog_idle: [
-                [0,0,0,0,0,0,0,0],[0,0,1,0,0,1,0,0],[0,1,1,1,1,1,1,0],[0,0,2,2,2,2,0,0],
-                [0,0,1,1,1,1,0,0],[0,1,1,0,0,1,1,0],[0,1,0,0,0,0,1,0],[0,0,0,0,0,0,0,0]
+                "................",
+                "......YY..YY....",
+                ".....gYKgKYYg...",
+                ".....gYYggYYg...",
+                "....ggGGGGGGgg..",
+                "...gGGGGGGGGGGg.",
+                "..gGGGGGGGGGGGGg",
+                ".gGGGGGGGGGGGGGG",
+                ".gGgGGGGGGGGgGg.",
+                "gg.gGGGGGGGGg.gg",
+                "g..gGGGGGGGGg..g",
+                "g..gGggggggGg..g",
+                "...gg......gg...",
+                "...g........g...",
+                "................",
+                "................"
             ],
             frog_jump: [
-                [0,0,0,0,0,0,0,0],[0,0,1,1,1,1,0,0],[0,1,1,1,1,1,1,0],[0,0,2,2,2,2,0,0],
-                [0,1,1,1,1,1,1,0],[0,1,0,0,0,0,1,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]
+                "................",
+                "......YY..YY....",
+                ".....gYKgKYYg...",
+                ".....gYYggYYg...",
+                "....ggGGGGGGgg..",
+                "...gGGGGGGGGGGg.",
+                "..gGGGGGGGGGGGGg",
+                ".gGGGGGGGGGGGGGG",
+                "gGgGggggggggGgGg",
+                "gg.gg......gg.gg",
+                "g..g........g..g",
+                "g..g........g..g",
+                "g..g........g..g",
+                "...g........g...",
+                "................",
+                "................"
             ],
             skull: [ 
-                [0,0,0,0,0,0,0,0],[0,9,9,9,9,9,9,0],[9,9,9,9,9,9,9,9],[9,12,12,9,9,12,12,9],
-                [9,12,12,9,9,12,12,9],[0,9,9,12,12,9,9,0],[0,0,9,0,0,9,0,0],[0,0,9,9,9,9,0,0]
+                "................",
+                ".......O........",
+                "....O.OYO.O.....",
+                "...OYYOYOYYO....",
+                "....YWWWWWYY....",
+                "...OYWWWWWYYO...",
+                ".OOYYWWWWWYYOO..",
+                "...OYWWWWWYYO...",
+                "....YWWWWWYY....",
+                "...OYYOYOYYO....",
+                "....O.OYO.O.....",
+                ".......O........",
+                "................",
+                "................",
+                "................",
+                "................"
             ],
             fly: [ 
-                [0,0,0,0,0,0,0,0],[0,0,14,0,0,14,0,0],[0,14,14,3,3,14,14,0],[0,0,3,3,3,3,0,0],
-                [0,0,3,9,9,3,0,0],[0,0,0,3,3,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]
+                "................",
+                "................",
+                "......WW..WW....",
+                ".....WWWWWWWW...",
+                ".....WWKWWKWW...",
+                "......KKKKKK....",
+                ".....gRKKKKRg...",
+                "......KKKKKK....",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................"
             ],
             turtle: [ 
-                [0,0,3,3,0,0,0,0],[0,3,4,4,4,4,0,0],[3,4,4,1,1,4,4,3],[0,4,1,4,4,1,4,0],
-                [0,4,1,4,4,1,4,0],[3,4,4,1,1,4,4,3],[0,3,4,4,4,4,0,0],[0,0,3,3,0,0,0,0]
+                "................",
+                ".......gg.......",
+                "......gGGg......",
+                "..gg..gGGg..gg..",
+                ".gGGg.TTTT.gGGg.",
+                ".gGGgTOOOOTgGGg.",
+                "..gg.TOOOOOT.gg.",
+                ".....TOOOOOT....",
+                ".....TOOOOOT....",
+                "..gg.TOOOOOT.gg.",
+                ".gGGgTOOOOTgGGg.",
+                ".gGGg.TTTT.gGGg.",
+                "..gg........gg..",
+                "................",
+                "................",
+                "................"
             ],
             turtle_dive_1: [ 
-                [0,0,0,0,0,0,0,0],[0,0,10,10,10,10,0,0],[0,10,4,4,4,4,10,0],[0,10,4,1,1,4,10,0],
-                [0,10,4,1,1,4,10,0],[0,10,4,4,4,4,10,0],[0,0,10,10,10,10,0,0],[0,0,0,0,0,0,0,0]
+                "................",
+                "................",
+                "................",
+                "......gGGg......",
+                "....g.TTTT.g....",
+                "...gGgTOOOOTgGg.",
+                "....g.TOOOOT.g..",
+                "......TOOOOT....",
+                "......TOOOOT....",
+                "....g.TOOOOT.g..",
+                "...gGgTOOOOTgGg.",
+                "....g.TTTT.g....",
+                "................",
+                "................",
+                "................",
+                "................"
             ],
             turtle_dive_2: [ 
-                [0,0,0,0,0,0,0,0],[0,0,11,11,11,11,0,0],[0,11,10,10,10,10,11,0],[0,11,10,11,11,10,11,0],
-                [0,11,10,11,11,10,11,0],[0,11,10,10,10,10,11,0],[0,0,11,11,11,11,0,0],[0,0,0,0,0,0,0,0]
+                "................",
+                "................",
+                "................",
+                "................",
+                "......TTTT......",
+                ".....TOOOOT.....",
+                ".....TOOOOT.....",
+                ".....TOOOOT.....",
+                ".....TOOOOT.....",
+                ".....TOOOOT.....",
+                "......TTTT......",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................"
             ],
             turtle_dive_3: [ 
-                [0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],
-                [0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................",
+                "................"
             ],
             car_yellow: [ 
-                [0,0,0,0,0,0,0,0],[0,12,12,0,0,12,12,0],[7,7,7,7,7,7,7,7],[7,7,12,8,8,12,7,7],
-                [7,7,12,8,8,12,7,7],[7,7,7,7,7,7,7,7],[0,12,12,0,0,12,12,0],[0,0,0,0,0,0,0,0]
+                "................",
+                "...DD......DD...",
+                "..DDDD....DDDD..",
+                ".KYYYYYYYYYYYYK.",
+                "KYYYYYYYYYYYYYYK",
+                "KYYYYYYCCCCYYYYK",
+                "KYYYYYYCCCCYYYYK",
+                "KYYYYYYCCCCYYYYK",
+                "KYYYYYYCCCCYYYYK",
+                "KYYYYYYYYYYYYYYK",
+                ".KYYYYYYYYYYYYK.",
+                "..DDDD....DDDD..",
+                "...DD......DD...",
+                "................",
+                "................",
+                "................"
             ],
-            car_white: [ 
-                [0,0,0,0,0,0,0,0],[0,9,9,9,9,9,9,0],[13,9,9,12,12,9,9,9],[13,9,9,12,12,9,9,9],
-                [13,9,9,12,12,9,9,9],[13,9,9,12,12,9,9,9],[0,9,9,9,9,9,9,0],[0,0,0,0,0,0,0,0]
+            car_green: [ 
+                "................",
+                "...DD......DD...",
+                "..DDDD....DDDD..",
+                ".KGGGGGGGGGGGGK.",
+                "KGGGGGGGGGGGGGGK",
+                "KGGWWCCCCWWGGGGK",
+                "KGGWWCCCCWWGGGGK",
+                "KGGWWCCCCWWGGGGK",
+                "KGGWWCCCCWWGGGGK",
+                "KGGGGGGGGGGGGGGK",
+                ".KGGGGGGGGGGGGK.",
+                "..DDDD....DDDD..",
+"...DD......DD...",
+                "................",
+                "................",
+                "................"
             ],
-            car_purple: [ 
-                [0,0,0,0,0,0,0,0],[0,12,12,0,0,12,12,0],[8,8,8,8,8,8,8,8],[8,8,9,9,9,9,8,8],
-                [8,8,9,9,9,9,8,8],[8,8,8,8,8,8,8,8],[0,12,12,0,0,12,12,0],[0,0,0,0,0,0,0,0]
+            car_blue: [ 
+                "................",
+                "....DD....DD....",
+                "...DDDD..DDDD...",
+                "..KBBBBBBBBBBK..",
+                ".KBBBBBBBBBBBBK.",
+                ".KBBBCCCCBBBBBK.",
+                ".KBBBCCCCBBBBBK.",
+                ".KBBBCCCCBBBBBK.",
+                ".KBBBCCCCBBBBBK.",
+                ".KBBBBBBBBBBBBK.",
+                "..KBBBBBBBBBBK..",
+                "...DDDD..DDDD...",
+                "....DD....DD....",
+                "................",
+                "................",
+                "................"
             ],
-            car_race: [ 
-                [0,0,0,0,0,0,0,0],[0,12,12,0,0,12,12,0],[9,9,9,9,9,9,9,9],[9,9,1,1,1,1,9,9],
-                [9,9,1,1,1,1,9,9],[9,9,9,9,9,9,9,9],[0,12,12,0,0,12,12,0],[0,0,0,0,0,0,0,0]
+            car_red: [ 
+                "................",
+                "...DD......DD...",
+                "..DDDD....DDDD..",
+                ".KRRRRRRRRRRRRK.",
+                "KRRRRRRRRRRRRRRK",
+                "KRRRRCCCCRRRRRRK",
+                "KRRRRCCCCRRRRRRK",
+                "KRRRRCCCCRRRRRRK",
+                "KRRRRCCCCRRRRRRK",
+                "KRRRRRRRRRRRRRRK",
+                ".KRRRRRRRRRRRRK.",
+                "..DDDD....DDDD..",
+                "...DD......DD...",
+                "................",
+                "................",
+                "................"
             ],
             truck_front: [ 
-                [0,0,0,0,0,0,0,0],[13,9,9,9,9,9,9,9],[13,9,12,12,12,9,9,9],[13,9,12,12,12,9,9,9],
-                [13,9,12,12,12,9,9,9],[13,9,12,12,12,9,9,9],[13,9,9,9,9,9,9,9],[0,0,0,0,0,0,0,0]
+                "................",
+                ".......DD.......",
+                "......DDDD......",
+                "...KTTTTTTTTTTK.",
+                ".KTTTTTTTTTTTTK.",
+                "KTTTCCCCTTTTTTK.",
+                "KTTTCCCCTTTTTTK.",
+                "KTTTCCCCTTTTTTK.",
+                "KTTTCCCCTTTTTTK.",
+                ".KTTTTTTTTTTTTK.",
+                "...KTTTTTTTTTTK.",
+                "......DDDD......",
+                ".......DD.......",
+                "................",
+                "................",
+                "................"
             ],
             truck_back: [
-                [0,0,0,0,0,0,0,0],[9,9,9,9,9,9,9,9],[9,9,9,9,9,9,9,9],[9,9,9,9,9,9,9,9],
-                [9,9,9,9,9,9,9,9],[9,9,9,9,9,9,9,9],[9,9,9,9,9,9,9,9],[0,0,0,0,0,0,0,0]
+                "................",
+                "...DD......DD...",
+                "..DDDD....DDDD..",
+                "KttttttttttttttK",
+                "KttttttttttttttK",
+                "KttttttttttttttK",
+                "KttttttttttttttK",
+                "KttttttttttttttK",
+                "KttttttttttttttK",
+                "KttttttttttttttK",
+                "KttttttttttttttK",
+                "..DDDD....DDDD..",
+"...DD......DD...",
+                "................",
+                "................",
+                "................"
             ],
             log: [
-                [0,0,0,0,0,0,0,0],[5,5,5,5,5,5,5,5],[6,5,5,5,6,5,5,5],[5,5,6,5,5,5,6,5],
-                [5,5,5,5,6,5,5,5],[6,5,5,5,5,5,5,5],[5,5,5,5,5,5,5,5],[0,0,0,0,0,0,0,0]
+                "................",
+                "TTTTTTTTTTTTTTTT",
+                "tttttttttttttttt",
+                "tttttttttttttttt",
+                "tttttttttttttttt",
+                "tttttttttttttttt",
+                "tttttttttttttttt",
+                "ttttTttTtttttttt",
+                "ttttTttTtttttttt",
+                "tttttttttttttttt",
+                "tttttttttttttttt",
+                "tttttttttttttttt",
+                "TTTTTTTTTTTTTTTT",
+                "................",
+                "................",
+                "................"
             ],
             log_end_l: [
-                [0,0,0,0,0,0,0,0],[0,13,5,5,5,5,5,5],[13,13,5,5,5,6,5,5],[13,13,6,5,5,5,6,5],
-                [13,13,5,5,6,5,5,5],[0,13,5,5,5,5,5,5],[0,0,5,5,5,5,5,5],[0,0,0,0,0,0,0,0]
+                "................",
+                ".....TTTTTTTTTTT",
+                "...TTttttttttttT",
+                "..TttttttttttttT",
+                ".TtttttttttttttT",
+                ".TtttttttttttttT",
+                ".TttTttTtttttttT",
+                ".TttTttTtttttttT",
+                ".TtttttttttttttT",
+                ".TtttttttttttttT",
+"..TttttttttttttT",
+"...TTttttttttttT",
+".....TTTTTTTTTTT",
+                "................",
+                "................",
+                "................"
             ],
             log_end_r: [
-                [0,0,0,0,0,0,0,0],[5,5,5,5,5,5,13,0],[5,5,5,5,6,5,13,13],[6,5,5,5,5,6,13,13],
-                [5,5,6,5,5,5,13,13],[5,5,5,5,5,5,13,0],[5,5,5,5,5,5,0,0],[0,0,0,0,0,0,0,0]
+                "................",
+                "TTTTTTTTTTT.....",
+                "TttttttttttTT...",
+                "TttttttttttttT..",
+                "TtttttttttttttT.",
+                "TtttttttttttttT.",
+                "TtttttttTttTttT.",
+                "TtttttttTttTttT.",
+                "TtttttttttttttT.",
+                "TtttttttttttttT.",
+                "TttttttttttttT..",
+                "TttttttttttTT...",
+                "TTTTTTTTTTT.....",
+                "................",
+                "................",
+                "................"
             ],
             pause_icon: [
-                [9,9,9,9,9,9,9,9],
-                [9,0,0,0,0,0,0,9],
-                [9,0,2,0,0,2,0,9],
-                [9,0,2,0,0,2,0,9],
-                [9,0,2,0,0,2,0,9],
-                [9,0,2,0,0,2,0,9],
-                [9,0,0,0,0,0,0,9],
-                [9,9,9,9,9,9,9,9]
+                "................",
+                "................",
+                "................",
+                "...WWW....WWW...",
+                "...WWW....WWW...",
+                "...WWW....WWW...",
+                "...WWW....WWW...",
+                "...WWW....WWW...",
+                "...WWW....WWW...",
+                "...WWW....WWW...",
+                "...WWW....WWW...",
+                "...WWW....WWW...",
+                "................",
+                "................",
+                "................",
+                "................"
             ],
             play_icon: [
-                [9,9,9,9,9,9,9,9],
-                [9,0,0,0,0,0,0,9],
-                [9,0,2,0,0,0,0,9],
-                [9,0,2,2,0,0,0,9],
-                [9,0,2,2,2,0,0,9],
-                [9,0,2,2,0,0,0,9],
-                [9,0,2,0,0,0,0,9],
-                [9,9,9,9,9,9,9,9]
+                "................",
+                "................",
+                "................",
+                "...WW...........",
+                "...WWWW.........",
+                "...WWWWWW.......",
+                "...WWWWWWWW.....",
+                "...WWWWWWWWWW...",
+                "...WWWWWWWWWW...",
+                "...WWWWWWWW.....",
+                "...WWWWWW.......",
+                "...WWWW.........",
+                "...WW...........",
+                "................",
+                "................",
+                "................"
             ]
         };
 
@@ -139,10 +400,16 @@
                 spCanvas.width = GRID_SIZE; spCanvas.height = GRID_SIZE;
                 const spCtx = spCanvas.getContext('2d');
                 const sprite = sprites[key];
-                for (let r = 0; r < 8; r++) {
-                    for (let c = 0; c < 8; c++) {
-                        const colorId = sprite[r][c];
-                        if (colorId !== 0) { spCtx.fillStyle = P[colorId]; spCtx.fillRect(c * 2, r * 2, 2, 2); }
+                
+                // 16x16 の文字配列を1ドットずつ描画
+                for (let r = 0; r < 16; r++) {
+                    for (let c = 0; c < 16; c++) {
+                        const char = sprite[r][c];
+                        const color = P[char];
+                        if (color) { 
+                            spCtx.fillStyle = color; 
+                            spCtx.fillRect(c, r, 1, 1); 
+                        }
                     }
                 }
                 spriteCanvases[key] = spCanvas;
@@ -280,9 +547,9 @@
                 { y: 5, type: 'log', speed: 1.5, len: 2, num: 3, xOffsets: [0, 6, 12] },
                 { y: 6, type: 'turtle', speed: -1.2, len: 3, num: 4, diveRate: 0.5, xOffsets: [0, 5, 9.5, 14] },
                 { y: 8,  type: 'truck', speed: -1.0, len: 2, num: 3, xOffsets: [0, 6, 12] },
-                { y: 9,  type: 'car_race', speed: 2.5, len: 1, num: 3, xOffsets: [0, 6, 12] },
-                { y: 10, type: 'car_purple', speed: -1.2, len: 1, num: 3, xOffsets: [0, 6, 12] },
-                { y: 11, type: 'car_white', speed: 1.8, len: 1, num: 3, xOffsets: [0, 6, 12] },
+                { y: 9,  type: 'car_red', speed: 2.5, len: 1, num: 3, xOffsets: [0, 6, 12] },
+                { y: 10, type: 'car_blue', speed: -1.2, len: 1, num: 3, xOffsets: [0, 6, 12] },
+                { y: 11, type: 'car_green', speed: 1.8, len: 1, num: 3, xOffsets: [0, 6, 12] },
                 { y: 12, type: 'car_yellow', speed: -1.5, len: 1, num: 3, xOffsets: [0, 6, 12] }
             ];
 
@@ -333,24 +600,19 @@
         }
 
         let lastPauseTime = 0;
-        // ★ ポーズ切り替え処理（連打防止対応）
         function togglePause() {
             if (state.status !== 'playing') return;
             const now = Date.now();
-            if (now - lastPauseTime < 300) return; // 連続反応を防ぐ
+            if (now - lastPauseTime < 300) return; 
             lastPauseTime = now;
 
             state.isPaused = !state.isPaused;
-            if (state.isPaused) {
-                stopBGM();
-            } else {
-                startBGM();
-            }
+            if (state.isPaused) stopBGM(); else startBGM();
         }
 
         function update() {
             if (state.status !== 'playing') return;
-            if (state.isPaused) return; // ポーズ中は更新を停止
+            if (state.isPaused) return; 
 
             state.tick++;
             state.timer -= 0.0006; 
@@ -505,7 +767,6 @@
                 if (spriteCanvases['frog_idle']) ctx.drawImage(spriteCanvases['frog_idle'], i * 10 + 5, canvas.height - 12, 8, 8);
             }
 
-            // ★ PAUSE状態の半暗転とテキスト表示
             if (state.isPaused) {
                 ctx.fillStyle = 'rgba(0,0,0,0.6)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -513,7 +774,6 @@
                 ctx.fillText("PAUSE", canvas.width / 2, canvas.height / 2 + 5);
             }
 
-            // ★ 右上のポーズアイコン描画（背景と被らないように Y座標を 0 に変更）
             if (state.status === 'playing') {
                 const iconKey = state.isPaused ? 'play_icon' : 'pause_icon';
                 drawCachedSprite(ctx, iconKey, canvas.width - 18, 0);
@@ -534,23 +794,19 @@
         let touchStartX = 0, touchStartY = 0; let isTouching = false; let currentSwipeDir = { dx: 0, dy: 0 };
         let autoMoveTimer = 0; const AUTO_MOVE_INTERVAL = 12; const DEADZONE = 25; 
 
-        // ★ タッチ・クリック座標計算の修正（object-fit: containの影響を考慮）
         function checkPauseClick(clientX, clientY) {
             if (state.status !== 'playing') return false;
             const rect = canvas.getBoundingClientRect();
             
-            // 実際に描画されているキャンバスの大きさとオフセットを計算
             const scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
             const drawWidth = canvas.width * scale;
             const drawHeight = canvas.height * scale;
             const offsetX = (rect.width - drawWidth) / 2 + rect.left;
             const offsetY = (rect.height - drawHeight) / 2 + rect.top;
 
-            // 画面上のクリック座標を、キャンバス内の内部ピクセル座標に変換
             const x = (clientX - offsetX) / scale;
             const y = (clientY - offsetY) / scale;
             
-            // 右上のポーズボタン周辺エリア（余裕を持たせた当たり判定）
             if (x >= 190 && x <= 230 && y >= -10 && y <= 30) {
                 togglePause();
                 return true;
